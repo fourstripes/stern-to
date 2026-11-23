@@ -85,9 +85,16 @@ test('cleared held controls require a fresh press before they can resume',t=>{
   assert.equal(h.read('S.lever[0]'),0);assert.equal(h.read('S.thr'),0);
 });
 
-test('automatic line-panel state keeps aria-expanded in sync',t=>{
-  const h=fixture(t);h.run('setLinesCollapsed(true)');assert.equal(h.element('lnBody').hidden,true);assert.equal(h.element('linesT').getAttribute('aria-expanded'),'false');
-  h.run('setLinesCollapsed(false)');assert.equal(h.element('lnBody').hidden,false);assert.equal(h.element('linesT').getAttribute('aria-expanded'),'true');
+test('mooring panels open only on request, stay exclusive, and fold on restart',t=>{
+  const h=fixture(t,{width:390,height:844});
+  const panels={anchors:'anchorBody',lines:'lnBody',fenders:'fenderBody'};
+  const expectOpen=section=>{for(const [name,id] of Object.entries(panels)){assert.equal(h.element(id).hidden,name!==section);assert.equal(h.element(name+'T').getAttribute('aria-expanded'),String(name===section));assert.equal(h.element(name+'T').getAttribute('aria-controls'),id);}};
+  expectOpen(null);play(h);expectOpen(null);
+  h.run('S.x=slip.x;S.y=slip.y');h.frame();expectOpen(null);
+  h.run('S.x=slip.x+300;S.y=slip.y+300');h.frame();expectOpen(null);
+  for(const section of ['anchors','lines','fenders']){h.click(section+'T');expectOpen(section);}
+  h.click('fendersT');expectOpen(null);
+  h.click('linesT');h.key('keydown','r',{target:'gl'});expectOpen(null);
 });
 
 test('preview origins and nonproduction paths never touch the public play counter',t=>{

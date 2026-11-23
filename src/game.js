@@ -81,7 +81,7 @@ const sendHand=b=>{
   if(best){best.tx=b.x;best.ty=b.y;best.h=b.h;}
 };
 const handAt=b=>hands.some(h=>Math.hypot(h.x-b.x,h.y-b.y)<.9);
-let sel=-1,haul=0,aSel=null; // selected line; +1 heave in, -1 slack, while held
+let sel=-1,haul=0,aSel=null,mooringSection=null; // selected line; +1 heave in, -1 slack, while held
 let FEND_D=.75; // how far a rigged fender holds the hull off
 const fendOK=sd=>{let n=0;for(let i=0;i<4;i++)if(i+1<=S.fendN[sd]+.001&&!S.fPop[i*2+sd])n++;return n;};
 function ownPoly(){ // hull outline, pushed out on any side with fenders rigged
@@ -95,11 +95,13 @@ function popFender(sd,px,py){
   S.fPop[best*2+sd]=.001;S.fStress[sd]=1.1;S.shake=.9;S.kick=1.2;S.boom={x:px,y:py};S.popT=S.t;toast('FENDER BURST',2200);
   for(let i=0;i<18;i++)spawn(1,px+rnd(-1,1),py+rnd(-1,1),rnd(-3,3),rnd(-3,3),rnd(.5,1),rnd(1,2.4),.7);
 }
-const FENDX=[-.78,-.5,-.2,.1],FENDL=['Fenders','Fenders · port','Fenders · stbd','Fenders · both'];
-function toggleFend(){if(state!=='play')return;S.fend=(S.fend+1)%4;toast(['Fenders in','Fenders to port','Fenders to starboard','Fenders both sides'][S.fend],1200);}
+const FENDX=[-.78,-.5,-.2,.1],FENDL=['','Port','Starboard','Both'];
+function setFenders(value){if(state!=='play'||!Number.isInteger(value)||value<0||value>3)return;S.fend=value;updateMooringUI();toast(['Fenders in','Fenders to port','Fenders to starboard','Fenders both sides'][S.fend],1200);}
+function toggleFend(){if(state==='play')setFenders((S.fend+1)%4);}
 function lineClick(i){
   if(state!=='play')return;const ln=lines[i];
-  if(ln.state!=='stowed'){sel=sel===i?-1:i;aSel=null;return;} /* tap a working line to single it out, tap again for all */
+  releaseMooringInputs();aSel=null;
+  if(ln.state!=='stowed'){sel=sel===i?-1:i;updateMooringUI();return;} /* tap a working line to single it out, tap again for all */
   const [best,bd,near]=pickBol(ln);
   if(!best){toast(near<60?'Too far to throw · '+Math.round(near)+' m to a bollard':'No bollard in reach',1500);return;}
   ln.bol=best;ln.dist=bd;ln.reach=bd;ln.good=true;ln.state='throw';ln.t=0;ln.ten=ln.tl=ln.strain=0;sendHand(best);toast(ln.name+' line away',1100);
@@ -134,6 +136,7 @@ function mooredStart(){
 // anchors: choose port, starboard or both (like the fenders), then let go, hold the chain, and weigh
 const hawseFor=sd=>shipId==='tender'?[24.6*SL,0]:[19.4*SL,sd*2.4*SB];
 const anchSides=()=>shipId==='tender'?[0]:S.anchSel===2?[-1,1]:[S.anchSel===0?-1:1];
+const preferredAnchor=()=>S.anchors.find(a=>a.side===aSel)||S.anchors.find(a=>a.side===anchSides()[0])||S.anchors[0];
 function cycleAnchSel(){
   if(state!=='play')return;if(shipId==='tender'){toast('The tender has one bow anchor',1200);return;}
   if(S.anchors.length||S.anchorCmd){toast('Weigh first to change anchors',1400);return;}
@@ -143,17 +146,18 @@ function anchorAct(){
   if(state!=='play')return;
   if(!S.anchors.length){if(!S.anchorCmd){S.anchorCmd=true;toast('Anchor party to the bow',1300);}return;}
   if(S.anchors.some(a=>!a.held)){S.anchors.forEach(a=>a.held=true);const L=Math.max(...S.anchors.map(a=>a.L0));toast('Chain held · '+Math.round(L)+' m out · '+chainMark(L),1800);return;}
-  const n=S.anchors.length;S.anchors.forEach(a=>S.weigh[a.side]=1);S.anchors=[];toast(n>1?'Anchors aweigh':'Anchor aweigh',1300);
+  releaseMooringInputs();const n=S.anchors.length;S.anchors.forEach(a=>S.weigh[a.side]=1);S.anchors=[];aSel=null;updateMooringUI();toast(n>1?'Anchors aweigh':'Anchor aweigh',1300);
 }
 function anchorTap(sd){
   if(state!=='play')return;if(shipId==='tender')sd=0;
   if(!S.anchors.find(a=>a.side===sd)){if(S.anchorCmd){toast('Anchor party busy',900);return;}S.dropSides=[sd];S.anchorCmd=true;toast('Anchor party to the bow',1200);return;}
-  aSel=aSel===sd?null:sd;sel=-1;
+  releaseMooringInputs();aSel=aSel===sd?null:sd;sel=-1;updateMooringUI();
 }
 function letGo(){if(state!=='play')return;
-  if(aSel!=null){const A=S.anchors.find(a=>a.side===aSel);if(A){S.anchors=S.anchors.filter(a=>a!==A);S.weigh[A.side]=1;toast('Anchor aweigh',1200);}aSel=null;return;}
-  if(sel>=0&&lines[sel].state!=='stowed'){lines[sel].state='stowed';toast(lines[sel].name+' line let go',1200);sel=-1;return;}
-  let n=0;for(const ln of lines)if(ln.state!=='stowed'){ln.state='stowed';n++;}if(n)toast('All lines let go',1200);sel=-1;}
+  releaseMooringInputs();
+  if(aSel!=null){const A=S.anchors.find(a=>a.side===aSel);if(A){S.anchors=S.anchors.filter(a=>a!==A);S.weigh[A.side]=1;toast('Anchor aweigh',1200);}aSel=null;updateMooringUI();return;}
+  if(sel>=0&&lines[sel].state!=='stowed'){lines[sel].state='stowed';toast(lines[sel].name+' line let go',1200);sel=-1;updateMooringUI();return;}
+  let n=0;for(const ln of lines)if(ln.state!=='stowed'){ln.state='stowed';n++;}if(n)toast('All lines let go',1200);sel=-1;updateMooringUI();}
 const env={wk:5,wFrom:270,sh:.2,sFrom:180,T:5.5,lam:48};
 // Menu choices are the baseline. Mission weather may temporarily change env.
 let selectedWeather={wk:env.wk,wFrom:env.wFrom,sh:env.sh,sFrom:env.sFrom};
@@ -208,6 +212,7 @@ function reset(){
      damage:0,hits:0,t:0,hold:0,inPos:false,lastTouch:-9,roll:0,shake:0};
   parts=[];$('rud').value=0;cam.x=S.x;cam.y=S.y;
   lines=LINE_DEF.map((d,i)=>({i,name:d[0],kind:d[3],a:d[1]*SL,b:d[2]*SB,state:'stowed',bol:null,L0:0,t:0,ten:0,strain:0,fx:S.x,fy:S.y,ready:false,dist:999,prog:0,reach:0,good:false}));queue=[];S.bowY=0;sel=-1;haul=0;aSel=null;$('result').hidden=true;
+  setMooringSection(null);
   if(stops){slip=stops[0].slip;buildSlipMarker();}
   resetTraffic();homeHands();resetVisuals();
 }
@@ -362,7 +367,7 @@ function step(dt){
       else if(ln.prog>=1){ln.state='fast';ln.L0=d+2;toast(ln.name+' line on · hold Heave in',1700);}
     }else if(ln.state==='fast'){
       const dx=ln.bol.x-fx,dy=ln.bol.y-fy,d=Math.hypot(dx,dy)||1;
-      if(d>45){ln.state='stowed';toast(ln.name+' line let go',1400);continue;}
+      if(d>45){if(sel===ln.i){releaseMooringInputs();sel=-1;}ln.state='stowed';toast(ln.name+' line let go',1400);continue;}
       if(haul&&aSel==null&&(sel<0||sel===ln.i||lines[sel].state!=='fast')){
         if(haul<0)ln.L0=clamp(ln.L0+.9*dt,2.5,45);
         else{const t=ln.tl||0;
@@ -379,7 +384,7 @@ function step(dt){
       const forcing=Math.abs(S.rpm[0])+Math.abs(S.rpm[1])>.3||Math.abs(S.thrAct)>.6||Math.hypot(u,v)>.7;
       ln.strain=ln.ten>60e3*LK&&forcing?(ln.strain||0)+dt:Math.max(0,(ln.strain||0)-dt*1.5);
       if(ln.strain>2.2){
-        ln.state='stowed';ln.strain=0;if(sel===ln.i)sel=-1;
+        ln.state='stowed';ln.strain=0;if(sel===ln.i){releaseMooringInputs();sel=-1;}
         S.snap={ax:fx,ay:fy,bx:ln.bol.x,by:ln.bol.y,top:ln.bol.top||1.6,a:ln.a,b:ln.b,t:0};
         S.shake=1;S.kick=1.6;S.damage=Math.min(100,S.damage+4);toast(ln.name.toUpperCase()+' LINE PARTED',2400);
         for(let i=0;i<28;i++){const q=Math.random();spawn(1,fx+dx*q+rnd(-1,1),fy+dy*q+rnd(-1,1),rnd(-3,3),rnd(-3,3),rnd(.6,1.2),rnd(1.2,2.8),.7);}
@@ -402,7 +407,7 @@ function step(dt){
       const open=-((vx-r*(fy-S.y))*dx+(vy+r*(fx-S.x))*dy)/d,tn=Math.max(0,30e3*ext+25e3*open)*LK;
       const Fx=tn*dx/d,Fy=tn*dy/d,bx=Fx*cs+Fy*sn,by=-Fx*sn+Fy*cs;X+=bx;Y+=by;N+=ha[0]*by-ha[1]*bx;}}
   }
-  if(wgh){S.anchors=S.anchors.filter(a=>a!==wgh);S.weigh[wgh.side]=1;aSel=null;haul=0;toast('Anchor up and stowed',1400);}
+  if(wgh){releaseMooringInputs();S.anchors=S.anchors.filter(a=>a!==wgh);S.weigh[wgh.side]=1;aSel=null;toast('Anchor up and stowed',1400);}
   S.u+=(X+MY*v*r)/MX*dt;S.v+=(Y-MX*u*r)/MY*dt;S.r+=N/IZ*dt;
   S.x+=(S.u*cs-S.v*sn)*dt;S.y+=(S.u*sn+S.v*cs)*dt;S.psi+=S.r*dt;
   collide();
@@ -1325,7 +1330,7 @@ function sync3D(dt){
 const PTS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const pt=d=>PTS[Math.round(d/22.5)%16];
 const lat=v=>Math.abs(v)<.05?'0.0':(v<0?'◀\uFE0E ':'')+Math.abs(v).toFixed(1)+(v>0?' ▶\uFE0E':'');
-const lv=[$('lvP'),$('lvS')],LV_TRACK=lv.map(e=>e.querySelector('.track')),LV_K=lv.map(e=>e.querySelector('.knob')),LV_R=lv.map(e=>e.querySelector('.rpm')),LV_V=lv.map(e=>e.querySelector('.val')),ANC=[...document.querySelectorAll('.anc')],RUD_G=document.querySelector('.dock .rudrow svg'),lnBtns=[...document.querySelectorAll('.ln')],hullMeter=document.querySelector('.dmg');
+const lv=[$('lvP'),$('lvS')],LV_TRACK=lv.map(e=>e.querySelector('.track')),LV_K=lv.map(e=>e.querySelector('.knob')),LV_R=lv.map(e=>e.querySelector('.rpm')),LV_V=lv.map(e=>e.querySelector('.val')),ANC=[...document.querySelectorAll('.anc')],FEND_BTNS=[...document.querySelectorAll('[data-fender]')],ACT_METER=$('actBox').querySelector('.meter'),RUD_G=document.querySelector('.dock .rudrow svg'),lnBtns=[...document.querySelectorAll('.ln')],hullMeter=document.querySelector('.dmg');
 let hudKey='';
 function hudFast(){
   const key=S.lever[0]+'|'+S.lever[1]+'|'+S.rpm[0].toFixed(3)+'|'+S.rpm[1].toFixed(3)+'|'+S.thr+'|'+S.rud+'|'+sync;if(key===hudKey)return;hudKey=key;
@@ -1345,6 +1350,29 @@ function hudFast(){
    const t=(+ri.value+35)/70,a=Math.min(t,.5),b=Math.max(t,.5),pc=x=>'calc(17px + (100% - 34px) * '+x+')';
    if(g)g.style.left=pc(t);ri.style.setProperty('--fa',pc(a));ri.style.setProperty('--fb',pc(b));}
 }
+function updateMooringUI(){
+  lnBtns.forEach((b,i)=>{const st=lines[i].state;
+    const cls='ln'+(i>3?' sp':'')+(st==='throw'||st==='haul'?' t':st==='fast'?' f':'')+(sel===i?' sel':''),tx=st==='fast'?'✓':st==='stowed'?'':'…';
+    if(b.className!==cls)b.className=cls;if(b.textContent!==tx)b.textContent=tx;});
+  for(const button of FEND_BTNS){const chosen=+button.dataset.fender===S.fend;button.classList.toggle('on',chosen);button.setAttribute('aria-pressed',String(chosen));}
+  const out=lines.filter(l=>l.state!=='stowed'),fast=out.filter(l=>l.state==='fast'),a=S.anchors[0];
+  const statuses={anchors:S.anchorCmd?'Working':S.anchors.length>1?'Both':a?(a.side<0?'Port':a.side>0?'Starboard':'Bow'):'',lines:out.length?out.length+' '+(fast.length===out.length?'fast':'out'):'',fenders:FENDL[S.fend]||(S.fendN.some(n=>n>0)?'Stowing':'')};
+  for(const section of ['anchors','lines','fenders']){const text=statuses[section],status=$(section+'Status');if(status.textContent!==text)status.textContent=text;$(section+'T').classList.toggle('has-equipment',!!text);}
+  {const sb=$('anchSel'),ab=$('anchAct'),down=S.anchors.length,L=down?Math.round(Math.max(...S.anchors.map(a=>a.L0))):0;
+    const st=shipId==='tender'?'Anchor · bow':['Anchor · P','Anchor · S','Anchor · both'][S.anchSel],at=S.anchorCmd?'Standing by':!down?'Let go':S.anchors.some(a=>!a.held)?'Hold · '+L+' m':'Weigh · '+L+' m';
+    if(sb.textContent!==st)sb.textContent=st;if(ab.textContent!==at)ab.textContent=at;ab.classList.toggle('on',!!down||S.anchorCmd);}
+  if(aSel!=null&&!S.anchors.some(a=>a.side===aSel)){releaseMooringInputs();aSel=null;}const aA=aSel!=null?S.anchors.find(a=>a.side===aSel):null;
+  {const A=preferredAnchor(),cr=$('chainRow'),tx=$('scopeTx'),sc=Math.round(18*Math.max(.7,SL));if(cr.hidden!==!A)cr.hidden=!A;if(tx.hidden!==!A)tx.hidden=!A;
+    if(A){const t=A.drag?'Dragging · '+Math.round(A.L0)+' m':A.set?'Holding · '+Math.round(A.L0)+' m':A.L0<sc?'Chain '+Math.round(A.L0)+' m · need '+sc:'Chain '+Math.round(A.L0)+' m · hold it';
+      if(tx.textContent!==t)tx.textContent=t;tx.className='lt'+(A.set&&!A.drag?' ok':A.drag?' bad':'');}}
+  ANC.forEach(b=>{const sd=shipId==='tender'?0:+b.dataset.a,A=S.anchors.find(a=>a.side===sd),cls='anc'+(A?(A.drag?' d':A.set?' f':' t'):'')+(aSel===sd&&A?' sel':'');if(b.className!==cls)b.className=cls;});
+  const one=sel>=0&&lines[sel].state==='fast'?lines[sel]:null,hd=mooringSection==='anchors'?!!aA:mooringSection==='lines'&&fast.length>0,ab=$('actBox');
+  if(!hd&&!ab.hidden)releaseMooringInputs();if(ab.hidden!==!hd)ab.hidden=!hd;
+  if(hd){const tn=aA?0:one?one.ten:Math.max(...lines.map(l=>l.state==='fast'?l.ten:0)),tx=aA?'Anchor '+(aA.side<0?'P':aA.side>0?'S':'')+' · '+Math.round(aA.L0)+' m':one?one.name:'All lines';
+    ACT_METER.hidden=!!aA;const releaseText=aA?'Weigh':'Let go';if($('lgBtn').textContent!==releaseText)$('lgBtn').textContent=releaseText;
+    $('actFill').style.width=Math.min(100,tn/(67e3*LK)*100)+'%';$('actFill').style.background=lines.some(l=>l.strain>.35)?'var(--port)':'var(--amber)';const nm=$('actName');if(nm.textContent!==tx)nm.textContent=tx;
+    $('hvBtn').classList.toggle('on',haul>0);$('slBtn').classList.toggle('on',haul<0);}
+}
 function hud(){
   hudFast();const now=performance.now();if(now-hudLast<1000/15)return;hudLast=now;
   $('bTime').textContent=fmt(S.t);$('dmgBar').style.width=(100-S.damage)+'%';$('dmgBar').style.background=S.damage>60?'var(--port)':S.damage>25?'var(--amber)':'var(--stbd)';hullMeter.setAttribute('aria-valuenow',Math.round(100-S.damage));
@@ -1358,22 +1386,7 @@ function hud(){
     $('navA').style.transform='rotate('+Math.atan2(dx*c0-dz*s0,-dx*s0-dz*c0)+'rad)';
     const lb=stops?(S.svc!=null?stops[S.stage].doing+' '+Math.round(S.svc/stops[S.stage].dur*100)+'%':stops[S.stage].name):S.mode==='depart'?(S.voyage?'To '+nextName():'Way out'):'Berth',nl=$('navL');if(nl.textContent!==lb)nl.textContent=lb;
     $('navD').textContent=Math.round(Math.hypot(dx,dz))+' m';}
-  lnBtns.forEach((b,i)=>{const st=lines[i].state;
-    const cls='ln'+(i>3?' sp':'')+(st==='throw'||st==='haul'?' t':st==='fast'?' f':'')+(sel===i?' sel':''),tx=st==='fast'?'✓':st==='stowed'?'':'…';
-    if(b.className!==cls)b.className=cls;if(b.textContent!==tx)b.textContent=tx;});
-  {const b=$('fendBtn'),tx=FENDL[S.fend];if(b.textContent!==tx)b.textContent=tx;b.classList.toggle('on',S.fend>0);}
-  {const sb=$('anchSel'),ab=$('anchAct'),down=S.anchors.length,L=down?Math.round(Math.max(...S.anchors.map(a=>a.L0))):0;
-    const st=shipId==='tender'?'Anchor · bow':['Anchor · P','Anchor · S','Anchor · both'][S.anchSel],at=S.anchorCmd?'Standing by':!down?'Let go':S.anchors.some(a=>!a.held)?'Hold · '+L+' m':'Weigh · '+L+' m';
-    if(sb.textContent!==st)sb.textContent=st;if(ab.textContent!==at)ab.textContent=at;ab.classList.toggle('on',!!down||S.anchorCmd);}
-  if(aSel!=null&&!S.anchors.some(a=>a.side===aSel))aSel=null;const aA=aSel!=null?S.anchors.find(a=>a.side===aSel):null;
-  {const A=S.anchors[0],cr=$('chainRow'),tx=$('scopeTx'),sc=Math.round(18*Math.max(.7,SL));if(cr.hidden!==!A)cr.hidden=!A;if(tx.hidden!==!A)tx.hidden=!A;
-    if(A){const t=A.drag?'Dragging · '+Math.round(A.L0)+' m':A.set?'Holding · '+Math.round(A.L0)+' m':A.L0<sc?'Chain '+Math.round(A.L0)+' m · need '+sc:'Chain '+Math.round(A.L0)+' m · hold it';
-      if(tx.textContent!==t)tx.textContent=t;tx.className='lt'+(A.set&&!A.drag?' ok':A.drag?' bad':'');}}
-  ANC.forEach(b=>{const sd=shipId==='tender'?0:+b.dataset.a,A=S.anchors.find(a=>a.side===sd),cls='anc'+(A?(A.drag?' d':A.set?' f':' t'):'')+(aSel===sd&&A?' sel':'');if(b.className!==cls)b.className=cls;});
-  const one=sel>=0&&lines[sel].state==='fast'?lines[sel]:null,hd=aA||one||lines.some(l=>l.state==='fast'),ab=$('actBox');if(ab.hidden!==!hd)ab.hidden=!hd;
-  if(hd){const tn=one?one.ten:Math.max(...lines.map(l=>l.state==='fast'?l.ten:0)),tx=aA?'Anchor '+(aA.side<0?'P':aA.side>0?'S':'')+' · '+Math.round(aA.L0)+' m':one?one.name:'All lines';
-    $('actFill').style.width=Math.min(100,tn/(67e3*LK)*100)+'%';$('actFill').style.background=lines.some(l=>l.strain>.35)?'var(--port)':'var(--amber)';const nm=$('actName');if(nm.textContent!==tx)nm.textContent=tx;
-    $('hvBtn').classList.toggle('on',haul>0);$('slBtn').classList.toggle('on',haul<0);}
+  updateMooringUI();
   $('rudV').textContent=S.rud===0?'midships':Math.round(Math.abs(S.rud))+'° '+(S.rud<0?'port':'stbd');
 }
 
@@ -1455,7 +1468,6 @@ function drawFrame(now){
     }
   }
   const VW=AW;
-  if(autoLines&&AW<600){const hide=state==='play'&&Math.hypot(slip.x-S.x,slip.y-S.y)>90&&!lines.some(l=>l.state!=='stowed')&&!S.anchors.length&&!S.anchorCmd;if($('lnBody').hidden!==hide)setLinesCollapsed(hide);}
   // leave ripples where the hull has been
   if(active&&dt>0){const sp=Math.hypot(S.u,S.v),c0=Math.cos(S.psi),s0=Math.sin(S.psi),act=Math.max(Math.abs(S.rpm[0]),Math.abs(S.rpm[1]));
     if(Math.hypot(S.x-wkX,S.y-wkY)>2.2||(T-wkT>.9&&(sp>.1||act>.05||Math.abs(S.thrAct)>.2))){
@@ -1487,11 +1499,11 @@ function drawFrame(now){
   if(off){ptr.style.left=clamp(sx,22,AW-22)+'px';ptr.style.top=clamp(sy,top+8,bot-8)+'px';ptr.style.transform='rotate('+Math.atan2(sy-acy,sx-acx)+'rad)';}
   renderer.render(scene3,camera);hud();
 }
-let autoLines=true;const hudEl=document.querySelector('.hud'),ptr=$('ptr'),compact=matchMedia('(orientation:landscape) and (max-height:520px)');
+const hudEl=document.querySelector('.hud'),ptr=$('ptr'),compact=matchMedia('(orientation:landscape) and (max-height:520px)');
 
 /* ---------- controls ---------- */
 let sync=false;const held=Object.create(null),detent=[0,0];
-const inputSources=new Map(),capturedPointers=new Map(),inputResetters=[],bumpResetters=[],bumpOwned=[false,false];
+const inputSources=new Map(),capturedPointers=new Map(),inputResetters=[],bumpResetters=[],mooringResetters=[],mooringButtons=new Set(),bumpOwned=[false,false];
 let holdBinding=0;
 const canDrive=()=>state==='play'&&!hold;
 function capturePointer(el,id){el.setPointerCapture(id);capturedPointers.set(id,el);}
@@ -1520,15 +1532,24 @@ function setHeldInput(source,command){
 // One input owner per pointer/key prevents releasing one finger from cancelling another.
 function bindHoldButton(button,command,before){
   const prefix='button:'+(holdBinding++)+':',active=new Set();
-  const begin=source=>{if(!canDrive()||active.has(source)||before&&before()===false)return;active.add(source);setHeldInput(source,command);button.classList.add('on');};
+  const begin=source=>{if(!canDrive()||button.closest('[hidden],[inert]')||active.has(source)||before&&before()===false)return false;active.add(source);setHeldInput(source,command);button.classList.add('on');return true;};
   const end=source=>{if(!active.delete(source))return;setHeldInput(source,null);button.classList.toggle('on',active.size>0);};
   const clear=()=>{for(const source of [...active])end(source);};inputResetters.push(clear);if(command.kind==='bump')bumpResetters.push(clear);
-  button.addEventListener('pointerdown',e=>{if(e.button!==0||!canDrive())return;e.preventDefault();e.stopPropagation();capturePointer(button,e.pointerId);begin(prefix+'pointer:'+e.pointerId);});
+  if(command.kind==='haul'){mooringResetters.push(clear);mooringButtons.add(button);}
+  button.addEventListener('pointerdown',e=>{if(e.button!==0||!canDrive())return;e.preventDefault();e.stopPropagation();if(begin(prefix+'pointer:'+e.pointerId))capturePointer(button,e.pointerId);});
   for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,e=>{end(prefix+'pointer:'+e.pointerId);forgetPointer(button,e.pointerId);});
   button.addEventListener('keydown',e=>{if(e.key!==' '&&e.key!=='Enter')return;e.preventDefault();e.stopPropagation();if(!e.repeat)begin(prefix+'key:'+e.key);});
   button.addEventListener('keyup',e=>{if(e.key!==' '&&e.key!=='Enter')return;e.preventDefault();e.stopPropagation();end(prefix+'key:'+e.key);});
   button.addEventListener('blur',()=>{for(const source of [...active])if(source.startsWith(prefix+'key:'))end(source);});
   button.addEventListener('click',e=>e.preventDefault());
+}
+// Folding or changing a mooring target stops only that momentary work.
+function releaseMooringInputs(){
+  for(const clearMooring of mooringResetters)clearMooring();
+  for(const [source,command] of inputSources)if(command.kind==='haul')inputSources.delete(source);
+  for(const [id,el] of [...capturedPointers])if(mooringButtons.has(el)){capturedPointers.delete(id);if(el.hasPointerCapture(id))el.releasePointerCapture(id);}
+  for(const button of mooringButtons)button.classList.remove('on');
+  applyHeldInputs();
 }
 function releaseControls(){
   for(const resetInput of inputResetters)resetInput();
@@ -1583,11 +1604,12 @@ const allStop=()=>{
   bumpOwned.fill(false);S.lever=[0,0];
 }; // engines only; the rudder stays where it is (Midships centres it)
 $('stop').onclick=allStop;$('syncBtn').onclick=toggleSync;
-$('fendBtn').onclick=toggleFend;$('anchSel').onclick=cycleAnchSel;
-[['chIn',1],['chOut',-1]].forEach(([id,d])=>bindHoldButton($(id),{kind:'haul',direction:d},()=>{if(!S.anchors.length)return false;aSel=S.anchors[0].side;sel=-1;}));
+FEND_BTNS.forEach(button=>button.onclick=()=>setFenders(+button.dataset.fender));$('anchSel').onclick=cycleAnchSel;
+[['chIn',1],['chOut',-1]].forEach(([id,d])=>bindHoldButton($(id),{kind:'haul',direction:d},()=>{const A=preferredAnchor();if(mooringSection!=='anchors'||!A)return false;aSel=A.side;sel=-1;}));
 document.querySelectorAll('.anc').forEach(b=>b.onclick=()=>anchorTap(+b.dataset.a));$('anchAct').onclick=anchorAct;
-[['hvBtn',1],['slBtn',-1]].forEach(([id,d])=>bindHoldButton($(id),{kind:'haul',direction:d}));
-$('lgBtn').onclick=letGo;
+const actionTargetReady=()=>mooringSection==='anchors'?aSel!=null&&S.anchors.some(a=>a.side===aSel):mooringSection==='lines'&&aSel==null&&lines.some(l=>l.state==='fast');
+[['hvBtn',1],['slBtn',-1]].forEach(([id,d])=>bindHoldButton($(id),{kind:'haul',direction:d},actionTargetReady));
+$('lgBtn').onclick=()=>{if(actionTargetReady())letGo();};
 lnBtns.forEach((b,i)=>b.onclick=()=>lineClick(i));
 
 cv.addEventListener('wheel',e=>{zoomMul=clamp(zoomMul*(e.deltaY<0?1.1:1/1.1),.5,3);e.preventDefault();},{passive:false});
@@ -1613,8 +1635,22 @@ cv.addEventListener('pointermove',e=>{
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('dblclick',()=>{camOff.x=camOff.y=0;zoomMul=1;rotv=0;pitch=.27;topDown=false;chase=false;});
 
-function setLinesCollapsed(hidden){$('lnBody').hidden=hidden;$('linesT').textContent=hidden?'Lines ▸':'Lines ▾';$('linesT').setAttribute('aria-expanded',String(!hidden));}
-$('linesT').onclick=()=>{autoLines=false;setLinesCollapsed(!$('lnBody').hidden);};
+function setMooringSection(section){
+  const panels={anchors:'anchorBody',lines:'lnBody',fenders:'fenderBody'};
+  if(section!==null&&!Object.hasOwn(panels,section))return;
+  const previous=mooringSection,focused=previous&&$(panels[previous]).contains(document.activeElement);
+  if(section!==previous){
+    releaseMooringInputs();
+    if(section==='lines')aSel=null;
+    else if(section==='anchors'){sel=-1;const A=preferredAnchor();aSel=A?A.side:null;}
+    mooringSection=section;
+  }
+  for(const [name,id] of Object.entries(panels)){$(id).hidden=name!==section;$(name+'T').setAttribute('aria-controls',id);$(name+'T').setAttribute('aria-expanded',String(name===section));}
+  if(section==='anchors'||section==='lines')$(panels[section]).appendChild($('actBox'));
+  updateMooringUI();invalidateLayout();
+  if(focused&&section!==previous){const heading=$((section||previous)+'T');if(!heading.closest('[inert]'))heading.focus({preventScroll:true});}
+}
+for(const section of ['anchors','lines','fenders'])$(section+'T').onclick=()=>setMooringSection(mooringSection===section?null:section);
 {const CORN=['c-tr','c-br','c-bl','c-tl'],g=$('gLines'),setC=c=>{CORN.forEach(k=>g.classList.toggle(k,k===c));try{localStorage.setItem('sternto-panel',c);}catch(e){}};
  try{const c=localStorage.getItem('sternto-panel');if(CORN.includes(c))setC(c);}catch(e){}
  $('cornerBtn').onclick=()=>{const cur=CORN.find(k=>g.classList.contains(k))||'c-tr';setC(CORN[(CORN.indexOf(cur)+1)%4]);};}
