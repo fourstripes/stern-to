@@ -89,7 +89,7 @@ The label is now Total games played. Every successfully started game increments 
 
 Reads refresh on menu opening with a cooldown and in-flight deduplication. The exact formatted number is shared across players; it counts games rather than unique people. Invalid or older responses cannot reduce the displayed total. Failed or ambiguous increment requests are not automatically retried, avoiding accidental double counts. The counter remains a lightweight online total: failed requests can miss a play, and a service outage must not prevent gameplay. No browser identifier, cookie or account is needed by this integration. Production-origin checks exclude local and preview testing.
 
-A read-only production request returned the existing total with HTTP 200 and the required cross-origin response header for GitHub Pages. An observed 11-second response justified a 15-second asynchronous timeout. The validation did not issue a live increment or reset.
+A read-only production request returned the existing total with HTTP 200 and the required cross-origin response header for GitHub Pages. The initial 15-second timeout proved too short: a later successful request took 20.448 seconds, while the official alias also responded slowly. Requests now have a 30-second asynchronous budget, with one read-only retry after three seconds. The counter sits at the top of the menu with an explicit Retry control and a Last known label when a previously confirmed total cannot refresh. The existing endpoint and key are retained. Validation did not issue a live increment or reset.
 
 ## Verification and limits
 

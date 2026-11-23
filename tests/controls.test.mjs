@@ -152,11 +152,15 @@ test('out-of-order reads and start responses cannot replace a newer shared total
   pending[1]({ok:true,json:async()=>({value:21})});pending[0]({ok:true,json:async()=>({value:20})});await settleCounter(h);assert.equal(h.element('playsN').textContent,'22');
 });
 
-test('failed or malformed counter responses show Unavailable without inventing a total or retrying hits',async t=>{
+test('failed or malformed counter reads retry once, then show Unavailable without inventing a total',async t=>{
   for(const fetch of [async()=>({ok:false,status:503}),async()=>({ok:true,json:async()=>({value:'not a count'})}),async()=>{throw new Error('Network unavailable');}]){
     const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch});await settleCounter(h);
+    assert.equal(h.element('playsState').textContent,'Retrying…');assert.equal(h.element('playsRetry').hidden,true);
+    h.frame(3000);await settleCounter(h);
     assert.equal(h.element('plays').hidden,false);assert.equal(h.element('playsN').textContent,'Unavailable');
+    assert.equal(h.element('playsRetry').hidden,false);assert.equal(h.fetchCalls.length,2);
     play(h);await settleCounter(h);assert.equal(h.read('state'),'play');assert.equal(h.element('playsN').textContent,'Unavailable');assert.equal(h.fetchCalls.filter(([url])=>url.includes('/hit/')).length,1);assert.deepEqual(h.errors,[]);
+    h.frame(40000);await settleCounter(h);assert.equal(h.fetchCalls.length,3,'failed reads have one bounded retry; failed hits have none');
   }
 });
 
@@ -164,13 +168,64 @@ test('a failed increment preserves the last confirmed total and is never retried
   const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:async url=>{if(url.includes('/hit/'))throw new Error('Response lost');return{ok:true,json:async()=>({value:321})};}});
   await settleCounter(h);play(h);await settleCounter(h);h.frame(15100);await settleCounter(h);
   assert.equal(h.element('playsN').textContent,'321');assert.equal(h.fetchCalls.filter(([url])=>url.includes('/hit/')).length,1);assert.deepEqual(h.errors,[]);
+  assert.equal(h.element('playsState').textContent,'Last known');assert.equal(h.element('playsRetry').hidden,false);
 });
 
-test('public counter aborts an unresponsive request without affecting the game',async t=>{
+test('a slow counter read can succeed after fifteen seconds without blocking play',async t=>{
+  let resolveRead;
+  const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:url=>url.includes('/get/')?new Promise(resolve=>resolveRead=resolve):Promise.resolve({ok:true,json:async()=>({value:5})})});
+  h.frame(20000);assert.equal(h.fetchCalls[0][1].signal.aborted,false);assert.equal(h.element('playsN').textContent,'Loading…');
+  resolveRead({ok:true,json:async()=>({value:4})});await settleCounter(h);
+  assert.equal(h.element('playsN').textContent,'4');assert.equal(h.element('playsState').hidden,true);assert.equal(h.element('playsRetry').hidden,true);
+  play(h);await settleCounter(h);assert.equal(h.read('state'),'play');assert.equal(h.element('playsN').textContent,'5');assert.deepEqual(h.errors,[]);
+});
+
+test('counter retry keeps duplicate reads coalesced and stops after recovery',async t=>{
+  let reads=0;
+  const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:async()=>++reads===1?{ok:false,status:503}:{ok:true,json:async()=>({value:45})}});
+  await settleCounter(h);h.click('menuBtn');h.click('playsRetry');h.run('plays("get");plays("get",true)');
+  h.frame(2999);await settleCounter(h);assert.equal(reads,1);
+  h.frame(1);await settleCounter(h);assert.equal(reads,2);assert.equal(h.element('playsN').textContent,'45');
+  assert.equal(h.element('playsState').hidden,true);assert.equal(h.element('playsRetry').hidden,true);
+  h.frame(40000);await settleCounter(h);assert.equal(reads,2);assert.deepEqual(h.errors,[]);
+});
+
+test('explicit Retry recovers a failed total with a read and never adds a game',async t=>{
+  let online=false;
+  const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:async()=>online?{ok:true,json:async()=>({value:48})}:{ok:false,status:503}});
+  await settleCounter(h);h.frame(3000);await settleCounter(h);assert.equal(h.element('playsRetry').hidden,false);
+  online=true;h.click('playsRetry');await settleCounter(h);
+  assert.equal(h.element('playsN').textContent,'48');assert.equal(h.element('playsRetry').hidden,true);
+  assert.equal(h.fetchCalls.length,3);assert.equal(h.fetchCalls.filter(([url])=>url.includes('/hit/')).length,0);assert.deepEqual(h.errors,[]);
+});
+
+test('online recovery refreshes the visible menu without reading in active play or previews',async t=>{
+  let online=false;
+  const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:async()=>online?{ok:true,json:async()=>({value:50})}:{ok:false,status:503}});
+  await settleCounter(h);h.frame(3000);await settleCounter(h);online=true;
+  h.window.dispatchEvent(new h.window.Event('online'));await settleCounter(h);assert.equal(h.element('playsN').textContent,'50');
+  play(h);await settleCounter(h);const calls=h.fetchCalls.length;h.window.dispatchEvent(new h.window.Event('online'));await settleCounter(h);assert.equal(h.fetchCalls.length,calls);
+  const preview=fixture(t);preview.window.dispatchEvent(new preview.window.Event('online'));await settleCounter(preview);assert.equal(preview.fetchCalls.length,0);
+});
+
+test('a newer success supersedes an older failed read and cancels its pending retry',async t=>{
+  const pending=[];
+  const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:()=>new Promise(resolve=>pending.push(resolve))});
+  pending[0]({ok:false,status:503});await settleCounter(h);assert.equal(h.element('playsState').textContent,'Retrying…');
+  play(h);pending[1]({ok:true,json:async()=>({value:52})});await settleCounter(h);
+  h.frame(3000);await settleCounter(h);assert.equal(h.fetchCalls.length,2);assert.equal(h.element('playsN').textContent,'52');assert.equal(h.element('playsState').hidden,true);assert.equal(h.element('playsRetry').hidden,true);
+  h.run('start();start()');pending[3]({ok:true,json:async()=>({value:54})});await settleCounter(h);
+  pending[2]({ok:false,status:503});await settleCounter(h);assert.equal(h.element('playsN').textContent,'54');assert.equal(h.element('playsState').hidden,true);assert.equal(h.element('playsRetry').hidden,true);assert.deepEqual(h.errors,[]);
+});
+
+test('public counter bounds two unresponsive read attempts without affecting the game',async t=>{
   const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:(_url,{signal})=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('Aborted'))))});
-  h.frame(11100);assert.equal(h.fetchCalls[0][1].signal.aborted,false);
-  h.advance(4100);await settleCounter(h);assert.equal(h.fetchCalls[0][1].signal.aborted,true);assert.deepEqual(h.errors,[]);assert.equal(h.read('state'),'menu');
+  h.frame(29900);assert.equal(h.fetchCalls[0][1].signal.aborted,false);
+  h.frame(200);await settleCounter(h);assert.equal(h.fetchCalls[0][1].signal.aborted,true);assert.equal(h.element('playsState').textContent,'Retrying…');
+  h.frame(3000);await settleCounter(h);assert.equal(h.fetchCalls.length,2);assert.equal(h.fetchCalls[1][1].signal.aborted,false);
+  h.frame(30001);await settleCounter(h);assert.equal(h.fetchCalls[1][1].signal.aborted,true);assert.deepEqual(h.errors,[]);assert.equal(h.read('state'),'menu');
   assert.equal(h.element('plays').hidden,false);assert.equal(h.element('playsN').textContent,'Unavailable');
+  assert.equal(h.element('playsRetry').hidden,false);h.frame(40000);await settleCounter(h);assert.equal(h.fetchCalls.length,2);
 });
 
 test('wake lock is deduplicated and released on pause',async t=>{
