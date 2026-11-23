@@ -89,7 +89,7 @@ const sendHand=b=>{
   let best=null,bd=1e9;for(const h of hands){if(busy(h))continue;const d=Math.hypot(h.x-b.x,h.y-b.y);if(d<bd){bd=d;best=h;}}
   if(best){best.tx=b.x;best.ty=b.y;best.h=b.h;}
 };
-let sel=-1,haul=0,aSel=null,mooringSection=null; // selected line; +1 heave in, -1 slack, while held
+let sel=-1,haul=0,anchorHold=null,mooringSection=null; // line haul and anchor windlass have separate input owners
 let FEND_D=.75; // how far a rigged fender holds the hull off
 const fendOK=sd=>{let n=0;for(let i=0;i<4;i++)if(i+1<=S.fendN[sd]+.001&&!S.fPop[i*2+sd])n++;return n;};
 function ownPoly(){ // hull outline, pushed out on any side with fenders rigged
@@ -108,7 +108,7 @@ function setFenders(value){if(state!=='play'||!Number.isInteger(value)||value<0|
 function toggleFend(){if(state==='play')setFenders((S.fend+1)%4);}
 function lineClick(i){
   if(state!=='play')return;const ln=lines[i];
-  releaseMooringInputs();aSel=null;
+  releaseMooringInputs('haul');
   if(ln.state!=='stowed'){sel=sel===i?-1:i;updateMooringUI();return;} /* tap a working line to single it out, tap again for all */
   const [best,bd,near]=pickBol(ln);
   if(!best){toast(near<60?'Too far to throw · '+Math.round(near)+' m to a bollard':'No bollard in reach',1500);return;}
@@ -141,30 +141,35 @@ function mooredStart(){
     if(best){ln.bol=best;ln.dist=ln.reach=bd;ln.good=true;ln.state='fast';ln.prog=1;
       const fx=S.x+ln.a*cs-ln.b*sn,fy=S.y+ln.a*sn+ln.b*cs;ln.L0=Math.hypot(best.x-fx,best.y-fy)+.4;}}
 }
-// anchors: choose port, starboard or both (like the fenders), then let go, hold the chain, and weigh
+// Every anchor command uses the selected sides; accepted crew work keeps its own side snapshot.
 const hawseFor=sd=>shipId==='tender'?[24.6*SL,0]:[19.4*SL,sd*2.4*SB];
 const anchSides=()=>shipId==='tender'?[0]:S.anchSel===2?[-1,1]:[S.anchSel===0?-1:1];
-const preferredAnchor=()=>S.anchors.find(a=>a.side===aSel)||S.anchors.find(a=>a.side===anchSides()[0])||S.anchors[0];
+const selectedAnchors=()=>S.anchors.filter(a=>anchSides().includes(a.side));
+const preferredAnchor=()=>selectedAnchors()[0]||S.anchors[0]; // goal display only; never an operation target
+function setAnchorSelection(value){
+  if(!canDrive()||!Number.isInteger(value)||value<0||value>2)return;
+  releaseMooringInputs('anchor');S.anchSel=shipId==='tender'?0:value;updateMooringUI();
+}
 function cycleAnchSel(){
-  if(state!=='play')return;if(shipId==='tender'){toast('The tender has one bow anchor',1200);return;}
-  if(S.anchors.length||S.anchorCmd){toast('Weigh first to change anchors',1400);return;}
-  S.anchSel=(S.anchSel+1)%3;toast(['Port anchor','Starboard anchor','Both anchors'][S.anchSel],900);
+  if(!canDrive())return;if(shipId==='tender'){toast('The tender has one bow anchor',1200);return;}
+  setAnchorSelection((S.anchSel+1)%3);toast(['Port anchor','Starboard anchor','Both anchors'][S.anchSel],900);
 }
-function anchorAct(){
-  if(state!=='play')return;
-  if(!S.anchors.length){if(!S.anchorCmd){S.anchorCmd=true;toast('Anchor party to the bow',1300);}return;}
-  if(S.anchors.some(a=>!a.held)){S.anchors.forEach(a=>{a.held=true;a.weighing=false;});const L=Math.max(...S.anchors.map(a=>a.L0));toast('Chain held · '+Math.round(L)+' m out · '+chainMark(L),1800);return;}
-  releaseMooringInputs();const stop=S.anchors.some(a=>a.weighing);
-  S.anchors.forEach(a=>a.weighing=!stop);updateMooringUI();toast(stop?'Chain held':S.anchors.length>1?'Weighing anchors · use Hold chain to pause':'Weighing anchor · use Hold chain to pause',1800);
+function dropAnchors(){
+  if(!canDrive())return;releaseMooringInputs('anchor');
+  for(const A of selectedAnchors()){A.held=true;A.weighing=false;A.tapHeave=false;}
+  const pending=S.dropSides||[],missing=anchSides().filter(sd=>!S.anchors.some(a=>a.side===sd)&&!pending.includes(sd));
+  if(!missing.length){updateMooringUI();return;}
+  S.dropSides=[...pending,...missing];S.anchorCmd=true;updateMooringUI();toast('Anchor party to the bow',1300);
 }
-function anchorTap(sd){
-  if(state!=='play')return;if(shipId==='tender')sd=0;
-  if(!S.anchors.find(a=>a.side===sd)){if(S.anchorCmd){toast('Anchor party busy',900);return;}S.dropSides=[sd];S.anchorCmd=true;toast('Anchor party to the bow',1200);return;}
-  releaseMooringInputs();aSel=aSel===sd?null:sd;sel=-1;updateMooringUI();
+function bringInAnchors(){
+  if(!canDrive())return;releaseMooringInputs('anchor');
+  const anchors=selectedAnchors();if(!anchors.length)return;
+  const stop=anchors.some(a=>a.weighing);
+  for(const A of anchors){A.held=true;A.weighing=!stop;A.tapHeave=false;}
+  updateMooringUI();toast(stop?'Chain held':anchors.length>1?'Bringing in both anchors':'Bringing in anchor',1500);
 }
 function letGo(){if(state!=='play')return;
-  releaseMooringInputs();
-  if(aSel!=null){const A=S.anchors.find(a=>a.side===aSel);if(A){A.held=true;A.weighing=!A.weighing;toast(A.weighing?'Weighing anchor · use Hold chain to pause':'Chain held',1800);}updateMooringUI();return;}
+  releaseMooringInputs('haul');
   if(sel>=0&&lines[sel].state!=='stowed'){lines[sel].state='stowed';toast(lines[sel].name+' line let go',1200);sel=-1;updateMooringUI();return;}
   let n=0;for(const ln of lines)if(ln.state!=='stowed'){ln.state='stowed';n++;}if(n)toast('All lines let go',1200);sel=-1;updateMooringUI();}
 const env={wk:5,wFrom:270,sh:.2,sFrom:180,T:5.5,lam:48};
@@ -219,7 +224,7 @@ function reset(){
   S={x:s[0]*GEO,y:s[1]*GEO,stage:0,svc:null,dmgBank:0,mode:'arrive',voyage:false,legT0:0,legHits0:0,passing:false,fend:0,fendN:[0,0],fStress:[0,0],fSq:[0,0],fPop:[0,0,0,0,0,0,0,0],boom:null,bowX:19.5,weigh:{'-1':0,'0':0,'1':0},anchors:[],anchSel:0,anchorCmd:false,fire:null,done:false,wreck:false,psi:s[2]*D2R,u:0,v:0,r:0,lever:[0,0],rpm:[0,0],gear:[0,0],clutch:[0,0],thr:0,thrAct:0,rud:0,
      damage:0,hits:0,t:0,hold:0,inPos:false,lastTouch:-9,roll:0,shake:0};
   parts=[];$('rud').value=0;cam.x=S.x;cam.y=S.y;
-  lines=LINE_DEF.map((d,i)=>({i,name:d[0],kind:d[3],a:d[1]*SL,b:d[2]*SB,state:'stowed',bol:null,L0:0,t:0,ten:0,strain:0,fx:S.x,fy:S.y,ready:false,dist:999,prog:0,reach:0,good:false}));S.bowY=0;sel=-1;haul=0;aSel=null;$('result').hidden=true;
+  lines=LINE_DEF.map((d,i)=>({i,name:d[0],kind:d[3],a:d[1]*SL,b:d[2]*SB,state:'stowed',bol:null,L0:0,t:0,ten:0,strain:0,fx:S.x,fy:S.y,ready:false,dist:999,prog:0,reach:0,good:false}));S.bowY=0;sel=-1;haul=0;anchorHold=null;$('result').hidden=true;
   setMooringSection(null);
   if(stops){slip=stops[0].slip;buildSlipMarker();}
   resetTraffic();homeHands();resetVisuals();
@@ -397,7 +402,7 @@ function step(dt){
 
   // mooring lines: thrown on a tap; the selected one is heaved in or slacked while a button is held
   // heaving on all lines evens the load: slack lines come in quickly, the hard ones are eased a touch
-  const allH=haul>0&&aSel==null&&(sel<0||lines[sel].state!=='fast'),fastL=lines.filter(l=>l.state==='fast'),avgT=fastL.length?fastL.reduce((q,l)=>q+(l.ten||0),0)/fastL.length:0,
+  const allH=haul>0&&(sel<0||lines[sel].state!=='fast'),fastL=lines.filter(l=>l.state==='fast'),avgT=fastL.length?fastL.reduce((q,l)=>q+(l.ten||0),0)/fastL.length:0,
     lenOf=l=>Math.hypot(l.bol.x-(S.x+l.a*cs-l.b*sn),l.bol.y-(S.y+l.a*sn+l.b*cs)),avgD=fastL.length?fastL.reduce((q,l)=>q+lenOf(l),0)/fastL.length:1;
   for(const ln of lines){
     const fx=S.x+ln.a*cs-ln.b*sn,fy=S.y+ln.a*sn+ln.b*cs;ln.fx=fx;ln.fy=fy;ln.tl=ln.ten;ln.ten=0;
@@ -410,8 +415,8 @@ function step(dt){
       else if(ln.prog>=1){ln.state='fast';ln.L0=d+2;toast(ln.name+' line on · hold Heave in',1700);}
     }else if(ln.state==='fast'){
       const dx=ln.bol.x-fx,dy=ln.bol.y-fy,d=Math.hypot(dx,dy)||1;
-      if(d>45){if(sel===ln.i){releaseMooringInputs();sel=-1;}ln.state='stowed';toast(ln.name+' line let go',1400);continue;}
-      if(haul&&aSel==null&&(sel<0||sel===ln.i||lines[sel].state!=='fast')){
+      if(d>45){if(sel===ln.i){releaseMooringInputs('haul');sel=-1;}ln.state='stowed';toast(ln.name+' line let go',1400);continue;}
+      if(haul&&(sel<0||sel===ln.i||lines[sel].state!=='fast')){
         if(haul<0)ln.L0=clamp(ln.L0+.9*dt,2.5,45);
         else{const t=ln.tl||0;
           if(t<50e3*LK){let rate=.5;if(allH&&fastL.length>1){const tgt=Math.max(avgT,8e3*LK),share=t<tgt*.85?1.2:t>tgt*1.15?-.16:.4;rate=.5*clamp(Math.pow(d/Math.max(avgD,.1),1.6),.25,2.4)*share;}ln.L0=clamp(ln.L0-rate*dt,2.5,45);}}
@@ -427,7 +432,7 @@ function step(dt){
       const forcing=Math.abs(S.rpm[0])+Math.abs(S.rpm[1])>.3||Math.abs(S.thrAct)>.6||Math.hypot(u,v)>.7;
       ln.strain=ln.ten>60e3*LK&&forcing?(ln.strain||0)+dt:Math.max(0,(ln.strain||0)-dt*1.5);
       if(ln.strain>2.2){
-        ln.state='stowed';ln.strain=0;if(sel===ln.i){releaseMooringInputs();sel=-1;}
+        ln.state='stowed';ln.strain=0;if(sel===ln.i){releaseMooringInputs('haul');sel=-1;}
         S.snap={ax:fx,ay:fy,bx:ln.bol.x,by:ln.bol.y,top:ln.bol.top||1.6,a:ln.a,b:ln.b,t:0};
         S.shake=1;S.kick=1.6;S.damage=Math.min(100,S.damage+4);toast(ln.name.toUpperCase()+' LINE PARTED',2400);
         for(let i=0;i<28;i++){const q=Math.random();spawn(1,fx+dx*q+rnd(-1,1),fy+dy*q+rnd(-1,1),rnd(-3,3),rnd(-3,3),rnd(.6,1.2),rnd(1.2,2.8),.7);}
@@ -438,18 +443,18 @@ function step(dt){
   const weighed=[];
   for(const A of S.anchors){
     A.drag=false;
-    const manual=haul&&aSel===A.side;
-    if(manual){A.held=true;A.weighing=false;A.L0=clamp(A.L0+(haul>0?-.8:2.2)*dt,2,140);}
+    const manual=anchorHold&&anchorHold.targets.includes(A)?anchorHold.direction:0;
+    if(manual){A.held=true;A.weighing=false;if(S.t>=anchorHold.after)A.L0=clamp(A.L0+(manual>0?-.8:2.2)*dt,2,140);}
     else if(A.weighing){A.held=true;A.L0=Math.max(2,A.L0-.8*dt);}
     const ha=hawseFor(A.side),fx=S.x+ha[0]*cs-ha[1]*sn,fy=S.y+ha[0]*sn+ha[1]*cs;let dx=A.x-fx,dy=A.y-fy,d=Math.hypot(dx,dy)||1;
-    const retrieving=manual?haul>0:A.weighing;
+    const retrieving=A.tapHeave||(manual?manual>0:A.weighing);A.tapHeave=false;
     if(retrieving&&A.L0<=2.05&&d<=2.5){weighed.push(A);continue;}
     if(retrieving&&A.L0<3&&d<3)A.set=false;
     const SCOPE=Math.ceil(18*Math.max(.7,SL)),inAnchorage=!!(stops&&stops[S.stage].anchor&&Math.hypot(A.x-slip.x,A.y-slip.y)<=slip.len/2);
     const readyToSet=!retrieving&&A.held&&A.L0>=SCOPE;
     A.settle=inAnchorage&&readyToSet&&Math.hypot(u,v)<.2&&Math.abs(r)<.6*D2R?(A.settle||0)+dt:0;
     if(!A.set&&readyToSet&&(inAnchorage?A.settle>=.75:d>=Math.min(A.L0-1.2,SCOPE*.8))){A.set=true;toast('Anchor holding · '+Math.floor(A.L0)+' m out',1800);}
-    if(!retrieving&&A.held&&!A.set&&A.L0<SCOPE&&S.t-(A.warnT||-9)>8){A.warnT=S.t;toast('Pay out more chain · tap +, or back away',2200);}
+    if(!retrieving&&A.held&&!A.set&&A.L0<SCOPE&&S.t-(A.warnT||-9)>8){A.warnT=S.t;toast('Pay out more chain · tap or hold +',2200);}
     {const al=(A.x-S.x)*cs+(A.y-S.y)*sn,la=-(A.x-S.x)*sn+(A.y-S.y)*cs;if(al<ha[0]-3&&al>-LEN/2&&Math.abs(la)<BEAM*.55){S.damage=Math.min(100,S.damage+dt*(.6+Math.hypot(u,v)*2));if(S.t-(A.scrT||-9)>4){A.scrT=S.t;toast('Chain scraping the hull · back away from it',2000);}}}
     if(!A.held){A.run=(A.run||0)+dt;if(A.run>.9&&A.run<4.4)A.L0+=4*(1-(A.run-.9)/3.5)*Math.max(.5,SL)*dt;A.L0=Math.max(A.L0,d+1);} /* free chain rumbles out to the sea bed */
     else{let ext=d-A.L0;if(ext>0){
@@ -457,7 +462,11 @@ function step(dt){
       const open=-((vx-r*(fy-S.y))*dx+(vy+r*(fx-S.x))*dy)/d,tn=Math.max(0,30e3*ext+25e3*open)*LK;
       const Fx=tn*dx/d,Fy=tn*dy/d,bx=Fx*cs+Fy*sn,by=-Fx*sn+Fy*cs;X+=bx;Y+=by;N+=ha[0]*by-ha[1]*bx;}}
   }
-  if(weighed.length){if(weighed.some(a=>a.side===aSel)){releaseMooringInputs();aSel=null;}S.anchors=S.anchors.filter(a=>!weighed.includes(a));for(const a of weighed)S.weigh[a.side]=1;toast(weighed.length>1?'Anchors up and stowed':'Anchor up and stowed',1400);}
+  if(weighed.length){
+    S.anchors=S.anchors.filter(a=>!weighed.includes(a));
+    if(![...inputSources.values()].some(c=>c.kind==='anchor'&&c.targets.some(a=>S.anchors.includes(a))))releaseMooringInputs('anchor');else applyHeldInputs();
+    for(const a of weighed)S.weigh[a.side]=1;toast(weighed.length>1?'Anchors up and stowed':'Anchor up and stowed',1400);
+  }
   const acceleration=bodyAcceleration(physics,S,{X,Y,N});
   S.u+=acceleration.u*dt;S.v+=acceleration.v*dt;S.r+=acceleration.r*dt;
   S.x+=(S.u*cs-S.v*sn)*dt;S.y+=(S.u*sn+S.v*cs)*dt;S.psi+=S.r*dt;
@@ -580,7 +589,7 @@ function toast(msg,ms){const t=$('toast'),on=!t.classList.contains('off');toast.
   if(!on||!toast.imp){if(!toast.q.length){toastShow(msg,ms);return;}toast.q.push([msg,ms]);toastNext();return;}
   toast.q.push([msg,ms]);if(toast.q.length>3)toast.q.shift();
   const left=Math.max(2600,Math.min(toast.hold,3600))-(performance.now()-toast.at);clearTimeout(toast.h);toast.h=setTimeout(toastNext,Math.max(0,left));}
-function toastShow(msg,ms){const t=$('toast');t.textContent=msg;t.classList.toggle('r',$('gLines').classList.contains('c-tl'));t.classList.remove('off');
+function toastShow(msg,ms){const t=$('toast');t.textContent=msg;t.classList.remove('off');
   toast.at=performance.now();toast.imp=ms>=2400&&ms<1e8;toast.hold=ms<1e8?Math.round(ms*1.6+600):ms;clearTimeout(toast.h);
   toast.h=setTimeout(toastNext,toast.q&&toast.q.length&&toast.imp?3200:toast.q&&toast.q.length?1800:toast.hold);}
 function toastNext(){const q=toast.q&&toast.q.shift();if(q)toastShow(q[0],q[1]);else $('toast').classList.add('off');}
@@ -1435,7 +1444,7 @@ function sync3D(dt){
 const PTS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const pt=d=>PTS[Math.round(d/22.5)%16];
 const lat=v=>Math.abs(v)<.05?'0.0':(v<0?'◀\uFE0E ':'')+Math.abs(v).toFixed(1)+(v>0?' ▶\uFE0E':'');
-const lv=[$('lvP'),$('lvS')],LV_TRACK=lv.map(e=>e.querySelector('.track')),LV_K=lv.map(e=>e.querySelector('.knob')),LV_R=lv.map(e=>e.querySelector('.rpm')),LV_V=lv.map(e=>e.querySelector('.val')),ANC=[...document.querySelectorAll('.anc')],FEND_BTNS=[...document.querySelectorAll('[data-fender]')],ACT_METER=$('actBox').querySelector('.meter'),RUD_G=document.querySelector('.dock .rudrow svg'),lnBtns=[...document.querySelectorAll('.ln')],hullMeter=document.querySelector('.dmg');
+const lv=[$('lvP'),$('lvS')],LV_TRACK=lv.map(e=>e.querySelector('.track')),LV_K=lv.map(e=>e.querySelector('.knob')),LV_R=lv.map(e=>e.querySelector('.rpm')),LV_V=lv.map(e=>e.querySelector('.val')),FEND_BTNS=[...document.querySelectorAll('[data-fender]')],ACT_METER=$('actBox').querySelector('.meter'),RUD_G=document.querySelector('.dock .rudrow svg'),lnBtns=[...document.querySelectorAll('.ln')],hullMeter=document.querySelector('.dmg');
 let hudKey='';
 function hudFast(){
   const key=S.lever[0]+'|'+S.lever[1]+'|'+S.rpm[0].toFixed(3)+'|'+S.rpm[1].toFixed(3)+'|'+S.thr+'|'+S.rud+'|'+sync;if(key===hudKey)return;hudKey=key;
@@ -1460,7 +1469,7 @@ function updateAnchorageGoal(){
   box.hidden=!show;if(!show)return;
   const goal=anchorageStatus(),paid=Math.floor(Math.max(0,goal.current)*10+1e-8)/10;
   const setText=(id,text)=>{const el=$(id);if(el.textContent!==text)el.textContent=text;};
-  setText('anchorPaid',paid.toFixed(1));setText('anchorNeed',String(goal.target));setText('anchorHint',goal.status);
+  setText('anchorNeed',String(goal.target));setText('anchorHint',goal.status);
   const progress=$('anchorProgress');progress.setAttribute('aria-valuemax',goal.target);progress.setAttribute('aria-valuenow',Math.min(goal.target,paid));
   progress.firstElementChild.style.width=Math.min(100,100*goal.current/goal.target)+'%';
   box.classList.toggle('ready',goal.inside&&goal.held&&goal.current>=goal.target);
@@ -1474,18 +1483,26 @@ function updateMooringUI(){
   const out=lines.filter(l=>l.state!=='stowed'),fast=out.filter(l=>l.state==='fast'),a=S.anchors[0];
   const statuses={anchors:S.anchorCmd?'Working':S.anchors.some(a=>a.weighing)?'Weighing':S.anchors.length>1?'Both':a?(a.side<0?'Port':a.side>0?'Starboard':'Bow'):'',lines:out.length?out.length+' '+(fast.length===out.length?'fast':'out'):'',fenders:FENDL[S.fend]||(S.fendN.some(n=>n>0)?'Stowing':'')};
   for(const section of ['anchors','lines','fenders']){const text=statuses[section],status=$(section+'Status');if(status.textContent!==text)status.textContent=text;$(section+'T').classList.toggle('has-equipment',!!text);}
-  {const sb=$('anchSel'),ab=$('anchAct'),down=S.anchors.length,L=down?Math.round(Math.max(...S.anchors.map(a=>a.L0))):0;
-    const st=shipId==='tender'?'Anchor · bow':['Anchor · P','Anchor · S','Anchor · both'][S.anchSel],at=S.anchorCmd?'Standing by':!down?'Let go':S.anchors.some(a=>a.weighing)?'Hold chain · '+L+' m':S.anchors.some(a=>!a.held)?'Hold · '+L+' m':'Weigh · '+L+' m';
-    if(sb.textContent!==st)sb.textContent=st;if(ab.textContent!==at)ab.textContent=at;ab.classList.toggle('on',!!down||S.anchorCmd);}
-  if(aSel!=null&&!S.anchors.some(a=>a.side===aSel)){releaseMooringInputs();aSel=null;}const aA=aSel!=null?S.anchors.find(a=>a.side===aSel):null;
-  {const A=preferredAnchor(),cr=$('chainRow'),tx=$('scopeTx'),sc=Math.ceil(18*Math.max(.7,SL));if(cr.hidden!==!A)cr.hidden=!A;if(tx.hidden!==!A)tx.hidden=!A;
-    if(A){const t=A.weighing?'Weighing · '+Math.round(A.L0)+' m':A.drag?'Dragging · '+Math.round(A.L0)+' m':A.set?'Holding · '+Math.round(A.L0)+' m':A.L0<sc?'Chain '+Math.round(A.L0)+' m · need '+sc:'Chain '+Math.round(A.L0)+' m · hold it';
-      if(tx.textContent!==t)tx.textContent=t;tx.className='lt'+(A.set&&!A.drag?' ok':A.drag?' bad':'');}}
-  ANC.forEach(b=>{const sd=shipId==='tender'?0:+b.dataset.a,A=S.anchors.find(a=>a.side===sd),cls='anc'+(A?(A.drag?' d':A.set?' f':' t'):'')+(aSel===sd&&A?' sel':'');if(b.className!==cls)b.className=cls;});
-  const one=sel>=0&&lines[sel].state==='fast'?lines[sel]:null,hd=mooringSection==='anchors'?!!aA:mooringSection==='lines'&&fast.length>0,ab=$('actBox');
-  if(!hd&&!ab.hidden)releaseMooringInputs();if(ab.hidden!==!hd)ab.hidden=!hd;
-  if(hd){const tn=aA?0:one?one.ten:Math.max(...lines.map(l=>l.state==='fast'?l.ten:0)),tx=aA?'Anchor '+(aA.side<0?'P':aA.side>0?'S':'')+' · '+Math.round(aA.L0)+' m':one?one.name:'All lines';
-    ACT_METER.hidden=!!aA;const releaseText=aA?(aA.weighing?'Hold chain':'Weigh'):'Let go';if($('lgBtn').textContent!==releaseText)$('lgBtn').textContent=releaseText;
+  {const select=$('anchSel'),tender=shipId==='tender',mode=tender?'bow':'paired';
+    if(select.dataset.mode!==mode){select.replaceChildren(...(tender?['Bow']:['Port','Starboard','Both']).map((label,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=label;return option;}));select.dataset.mode=mode;}
+    select.value=String(tender?0:S.anchSel);
+    const sides=anchSides(),anchors=selectedAnchors(),pending=(S.dropSides||[]).filter(sd=>sides.includes(sd)),retrieving=anchors.some(a=>a.weighing);
+    const drop=$('anchDrop'),weigh=$('anchWeigh');drop.disabled=!sides.some(sd=>!S.anchors.some(a=>a.side===sd)&&!pending.includes(sd));
+    const dropText=pending.length?'Dropping…':'Drop';if(drop.textContent!==dropText)drop.textContent=dropText;
+    weigh.disabled=!anchors.length;const weighText=retrieving?'Stop':'Bring in';if(weigh.textContent!==weighText)weigh.textContent=weighText;weigh.classList.toggle('on',retrieving);
+    $('chIn').disabled=$('chOut').disabled=!anchors.length;
+    const length=A=>(Math.floor(A.L0*10+1e-8)/10).toFixed(1)+' m',chain=$('anchorChain');
+    const chainText=sides.length===1?(anchors[0]?length(anchors[0]).replace(' m',''):'—'):sides.map(sd=>{const A=anchors.find(a=>a.side===sd);return(sd<0?'P':'S')+(A?length(A).replace(' m',''):'—');}).join('\n');
+    if(chain.textContent!==chainText)chain.textContent=chainText;
+    chain.setAttribute('aria-label',sides.map(sd=>{const A=anchors.find(a=>a.side===sd);return(sd<0?'Port':sd>0?'Starboard':'Bow')+': '+(A?length(A)+' of chain out':'stowed');}).join('; '));
+    const tx=$('scopeTx'),dragging=anchors.some(a=>a.drag),holding=anchors.length&&anchors.every(a=>a.set&&!a.drag),sc=Math.ceil(18*Math.max(.7,SL));
+    const text=pending.length?'Preparing selected anchor'+(pending.length>1?'s':''):retrieving?'Bringing in':dragging?'Dragging':!anchors.length?'Stowed':holding?'Holding':anchors.some(a=>a.L0<sc)?'Chain held · use +':'Chain held';
+    if(tx.textContent!==text)tx.textContent=text;tx.className='lt'+(holding?' ok':dragging?' bad':'');
+  }
+  const one=sel>=0&&lines[sel].state==='fast'?lines[sel]:null,hd=mooringSection==='lines'&&fast.length>0,ab=$('actBox');
+  if(!hd&&!ab.hidden)releaseMooringInputs('haul');if(ab.hidden!==!hd)ab.hidden=!hd;
+  if(hd){const tn=one?one.ten:Math.max(...lines.map(l=>l.state==='fast'?l.ten:0)),tx=one?one.name:'All lines';
+    ACT_METER.hidden=false;if($('lgBtn').textContent!=='Let go')$('lgBtn').textContent='Let go';
     $('actFill').style.width=Math.min(100,tn/(67e3*LK)*100)+'%';$('actFill').style.background=lines.some(l=>l.strain>.35)?'var(--port)':'var(--amber)';const nm=$('actName');if(nm.textContent!==tx)nm.textContent=tx;
     $('hvBtn').classList.toggle('on',haul>0);$('slBtn').classList.toggle('on',haul<0);}
 }
@@ -1548,11 +1565,14 @@ function advanceDeckWork(dt){
   crew[0].visible=!(goIn&&Math.abs(S.bowX-13.8)<.2&&Math.abs(S.bowY)<.2);
   if(S.anchorCmd&&Math.abs(S.bowX-23.2)<.1){
     const c0=Math.cos(S.psi),s0=Math.sin(S.psi);S.anchorCmd=false;
-    const dsides=(S.dropSides||anchSides()).filter(sd=>!S.anchors.some(a=>a.side===sd));S.dropSides=null;if(!dsides.length)dsides.push(anchSides()[0]);
-    for(const sd of dsides){const hp=hawseFor(sd),ax=S.x+hp[0]*c0-hp[1]*s0,ay=S.y+hp[0]*s0+hp[1]*c0;S.anchors.push({side:sd,x:ax,y:ay,L0:3,held:false,t:0});}
-    const nm=dsides.length>1?'Both anchors':['Port','Bow','Starboard'][dsides[0]+1]+' anchor';toast(nm+' away · chain running',1500);
-    const ax=S.x+hawseFor(dsides[0])[0]*c0,ay=S.y+hawseFor(dsides[0])[0]*s0;
-    for(let i=0;i<16;i++)spawn(1,ax+rnd(-1,1),ay+rnd(-1,1),rnd(-1.8,1.8),rnd(-1.8,1.8),rnd(.5,.9),rnd(1.2,2.6),.6);wakeDrop(ax,ay,1.3);
+    const dsides=(S.dropSides||[]).filter(sd=>!S.anchors.some(a=>a.side===sd));S.dropSides=null;
+    for(const sd of dsides){const hp=hawseFor(sd),ax=S.x+hp[0]*c0-hp[1]*s0,ay=S.y+hp[0]*s0+hp[1]*c0;S.anchors.push({side:sd,x:ax,y:ay,L0:3,held:true,t:0});}
+    if(dsides.length){
+      const nm=dsides.length>1?'Both anchors':['Port','Bow','Starboard'][dsides[0]+1]+' anchor';toast(nm+' down · 3 m chain held',1500);
+      const ax=S.x+hawseFor(dsides[0])[0]*c0,ay=S.y+hawseFor(dsides[0])[0]*s0;
+      for(let i=0;i<16;i++)spawn(1,ax+rnd(-1,1),ay+rnd(-1,1),rnd(-1.8,1.8),rnd(-1.8,1.8),rnd(.5,.9),rnd(1.2,2.6),.6);wakeDrop(ax,ay,1.3);
+    }
+    updateMooringUI();
   }
   // stern hands rig or strike the fenders one at a time, working forward
   for(let sdI=0;sdI<2;sdI++){
@@ -1620,22 +1640,23 @@ const hudEl=document.querySelector('.hud'),ptr=$('ptr'),compact=matchMedia('(ori
 
 /* ---------- controls ---------- */
 let sync=false;const held=Object.create(null),detent=[0,0];
-const inputSources=new Map(),capturedPointers=new Map(),inputResetters=[],bumpResetters=[],mooringResetters=[],mooringButtons=new Set(),bumpOwned=[false,false];
+const inputSources=new Map(),capturedPointers=new Map(),inputResetters=[],bumpResetters=[],mooringBindings=[],bumpOwned=[false,false];
 let holdBinding=0;
 const canDrive=()=>state==='play'&&!hold&&!(S.cineT!=null&&!S.cineDone);
 function capturePointer(el,id){el.setPointerCapture(id);capturedPointers.set(id,el);}
 function forgetPointer(el,id){if(capturedPointers.get(id)===el)capturedPointers.delete(id);}
 function applyHeldInputs(){
-  let thr=0,lineHaul=0;const bumps=[null,null];
+  let thr=0,lineHaul=0,anchorInput=null;const bumps=[null,null];
   for(const command of inputSources.values()){
     if(command.kind==='thruster')thr=command.direction;
     else if(command.kind==='haul')lineHaul=command.direction;
+    else if(command.kind==='anchor'&&command.targets.some(a=>S.anchors.includes(a)))anchorInput=command;
     else if(command.kind==='bump'){
       if(sync)bumps[0]=bumps[1]=command.direction;
       else bumps[command.engine]=command.direction;
     }
   }
-  if(!S)return;S.thr=thr;haul=lineHaul;
+  if(!S)return;S.thr=thr;haul=lineHaul;anchorHold=anchorInput;
   for(let i=0;i<2;i++){
     if(bumps[i]!==null){S.lever[i]=bumps[i]*.32;bumpOwned[i]=true;}
     else if(bumpOwned[i]){S.lever[i]=0;bumpOwned[i]=false;}
@@ -1649,10 +1670,10 @@ function setHeldInput(source,command){
 // One input owner per pointer/key prevents releasing one finger from cancelling another.
 function bindHoldButton(button,command,before){
   const prefix='button:'+(holdBinding++)+':',active=new Set();
-  const begin=source=>{if(!canDrive()||button.closest('[hidden],[inert]')||active.has(source)||before&&before()===false)return false;active.add(source);setHeldInput(source,command);button.classList.add('on');return true;};
+  const begin=source=>{if(!canDrive()||button.disabled||button.closest('[hidden],[inert]')||active.has(source)||before&&before()===false)return false;active.add(source);setHeldInput(source,command);button.classList.add('on');return true;};
   const end=source=>{if(!active.delete(source))return;setHeldInput(source,null);button.classList.toggle('on',active.size>0);};
   const clear=()=>{for(const source of [...active])end(source);};inputResetters.push(clear);if(command.kind==='bump')bumpResetters.push(clear);
-  if(command.kind==='haul'){mooringResetters.push(clear);mooringButtons.add(button);}
+  if(command.kind==='haul')mooringBindings.push({kind:'haul',button,clear});
   button.addEventListener('pointerdown',e=>{if(e.button!==0||!canDrive())return;e.preventDefault();e.stopPropagation();if(begin(prefix+'pointer:'+e.pointerId))capturePointer(button,e.pointerId);});
   for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,e=>{end(prefix+'pointer:'+e.pointerId);forgetPointer(button,e.pointerId);});
   button.addEventListener('keydown',e=>{if(e.key!==' '&&e.key!=='Enter')return;e.preventDefault();e.stopPropagation();if(!e.repeat)begin(prefix+'key:'+e.key);});
@@ -1660,12 +1681,35 @@ function bindHoldButton(button,command,before){
   button.addEventListener('blur',()=>{for(const source of [...active])if(source.startsWith(prefix+'key:'))end(source);});
   button.addEventListener('click',e=>e.preventDefault());
 }
-// Folding or changing a mooring target stops only that momentary work.
-function releaseMooringInputs(){
-  for(const clearMooring of mooringResetters)clearMooring();
-  for(const [source,command] of inputSources)if(command.kind==='haul')inputSources.delete(source);
-  for(const [id,el] of [...capturedPointers])if(mooringButtons.has(el)){capturedPointers.delete(id);if(el.hasPointerCapture(id))el.releasePointerCapture(id);}
-  for(const button of mooringButtons)button.classList.remove('on');
+// Tap changes chain by one metre. A deliberate hold then runs the same selected windlass(es).
+function adjustAnchorChain(targets,direction){
+  for(const A of targets)if(S.anchors.includes(A)){A.held=true;A.weighing=false;A.tapHeave=direction>0;A.L0=clamp(A.L0-direction,2,140);}
+  updateMooringUI();
+}
+function bindChainButton(button,direction){
+  const prefix='anchor:'+(holdBinding++)+':',active=new Set();
+  const targets=()=>canDrive()&&mooringSection==='anchors'&&!button.disabled&&!button.closest('[hidden],[inert]')?selectedAnchors():[];
+  const begin=source=>{
+    if(active.has(source))return false;const anchors=targets();if(!anchors.length)return false;
+    adjustAnchorChain(anchors,direction);active.add(source);setHeldInput(source,{kind:'anchor',direction,targets:anchors,after:S.t+.35});button.classList.add('on');return true;
+  };
+  const end=source=>{if(!active.delete(source))return;setHeldInput(source,null);button.classList.toggle('on',active.size>0);};
+  const clear=()=>{for(const source of [...active])end(source);};inputResetters.push(clear);mooringBindings.push({kind:'anchor',button,clear});
+  button.addEventListener('pointerdown',e=>{if(e.button!==0||!canDrive())return;e.preventDefault();e.stopPropagation();if(begin(prefix+'pointer:'+e.pointerId))capturePointer(button,e.pointerId);});
+  for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,e=>{end(prefix+'pointer:'+e.pointerId);forgetPointer(button,e.pointerId);if(button.hasPointerCapture(e.pointerId))button.releasePointerCapture(e.pointerId);});
+  button.addEventListener('keydown',e=>{if(e.key!==' '&&e.key!=='Enter')return;e.preventDefault();e.stopPropagation();if(!e.repeat)begin(prefix+'key:'+e.key);});
+  button.addEventListener('keyup',e=>{if(e.key!==' '&&e.key!=='Enter')return;e.preventDefault();e.stopPropagation();end(prefix+'key:'+e.key);});
+  button.addEventListener('blur',()=>{for(const source of [...active])if(source.startsWith(prefix+'key:'))end(source);});
+  // Pointer activation was handled on down; a click without pointer detail supports assistive activation.
+  button.addEventListener('click',e=>{e.preventDefault();if(e.detail||e.pointerType)return;const anchors=targets();if(anchors.length)adjustAnchorChain(anchors,direction);});
+}
+// Folding stops both kinds; changing an anchor or line target stops only its own momentary work.
+function releaseMooringInputs(kind=null){
+  const bindings=mooringBindings.filter(b=>!kind||b.kind===kind),buttons=new Set(bindings.map(b=>b.button));
+  for(const binding of bindings)binding.clear();
+  for(const [source,command] of inputSources)if((command.kind==='haul'||command.kind==='anchor')&&(!kind||command.kind===kind))inputSources.delete(source);
+  for(const [id,el] of [...capturedPointers])if(buttons.has(el)){capturedPointers.delete(id);if(el.hasPointerCapture(id))el.releasePointerCapture(id);}
+  for(const button of buttons)button.classList.remove('on');
   applyHeldInputs();
 }
 function releaseControls(){
@@ -1674,7 +1718,7 @@ function releaseControls(){
   for(const key in held)delete held[key];detent.fill(0);
   pts.clear();drag=null;g2=null;
   for(const [id,el] of [...capturedPointers]){if(el.hasPointerCapture(id))el.releasePointerCapture(id);}capturedPointers.clear();
-  if(S)S.thr=0;haul=0;hudKey='';
+  if(S)S.thr=0;haul=0;anchorHold=null;hudKey='';
 }
 const putLever=(i,v)=>{if(sync)S.lever=[v,v];else S.lever[i]=v;};
 const setLever=(i,v)=>{v=clamp(v,-1,1);putLever(i,Math.abs(v)<.03?0:Math.round(v*20)/20);};
@@ -1721,10 +1765,10 @@ const allStop=()=>{
   bumpOwned.fill(false);S.lever=[0,0];
 }; // engines only; the rudder stays where it is (Midships centres it)
 $('stop').onclick=allStop;$('syncBtn').onclick=toggleSync;
-FEND_BTNS.forEach(button=>button.onclick=()=>setFenders(+button.dataset.fender));$('anchSel').onclick=cycleAnchSel;
-[['chIn',1],['chOut',-1]].forEach(([id,d])=>bindHoldButton($(id),{kind:'haul',direction:d},()=>{const A=preferredAnchor();if(mooringSection!=='anchors'||!A)return false;aSel=A.side;sel=-1;}));
-document.querySelectorAll('.anc').forEach(b=>b.onclick=()=>anchorTap(+b.dataset.a));$('anchAct').onclick=anchorAct;
-const actionTargetReady=()=>mooringSection==='anchors'?aSel!=null&&S.anchors.some(a=>a.side===aSel):mooringSection==='lines'&&aSel==null&&lines.some(l=>l.state==='fast');
+FEND_BTNS.forEach(button=>button.onclick=()=>setFenders(+button.dataset.fender));$('anchSel').onchange=()=>setAnchorSelection(+$('anchSel').value);
+[['chIn',1],['chOut',-1]].forEach(([id,d])=>bindChainButton($(id),d));
+$('anchDrop').onclick=dropAnchors;$('anchWeigh').onclick=bringInAnchors;
+const actionTargetReady=()=>mooringSection==='lines'&&lines.some(l=>l.state==='fast');
 [['hvBtn',1],['slBtn',-1]].forEach(([id,d])=>bindHoldButton($(id),{kind:'haul',direction:d},actionTargetReady));
 $('lgBtn').onclick=()=>{if(actionTargetReady())letGo();};
 lnBtns.forEach((b,i)=>b.onclick=()=>lineClick(i));
@@ -1758,12 +1802,11 @@ function setMooringSection(section){
   const previous=mooringSection,focused=previous&&$(panels[previous]).contains(document.activeElement);
   if(section!==previous){
     releaseMooringInputs();
-    if(section==='lines')aSel=null;
-    else if(section==='anchors'){sel=-1;const A=preferredAnchor();aSel=A?A.side:null;}
+    if(section==='anchors')sel=-1;
     mooringSection=section;
+    if(section)$('gLines').scrollTop=0;
   }
   for(const [name,id] of Object.entries(panels)){$(id).hidden=name!==section;$(name+'T').setAttribute('aria-controls',id);$(name+'T').setAttribute('aria-expanded',String(name===section));}
-  if(section==='anchors'||section==='lines')$(panels[section]).appendChild($('actBox'));
   updateMooringUI();invalidateLayout();
   if(focused&&section!==previous){const heading=$((section||previous)+'T');if(!heading.closest('[inert]'))heading.focus({preventScroll:true});}
 }
@@ -1800,7 +1843,8 @@ addEventListener('keydown',e=>{
     else if(k==='h'||k==='j'){if(!e.repeat||inputSources.has('shortcut:'+k))setHeldInput('shortcut:'+k,{kind:'haul',direction:k==='h'?1:-1});}
     else if(k==='g'){if(!e.repeat)letGo();}
     else if(k==='f'){if(!e.repeat)toggleFend();}
-    else if(k==='x'){if(!e.repeat)anchorAct();}
+    else if(k==='x'){if(!e.repeat)dropAnchors();}
+    else if(k==='b'){if(!e.repeat)bringInAnchors();}
     else if(k==='z'){if(!e.repeat)cycleAnchSel();}
     else if(k==='a'||k==='d'){if(!e.repeat||inputSources.has('shortcut:'+k))setHeldInput('shortcut:'+k,{kind:'thruster',direction:k==='a'?-1:1});}
     else if(k==='r'){if(!e.repeat)start();}
@@ -1842,8 +1886,8 @@ function trapModalFocus(e,modal){
   if(e.shiftKey&&i<=0){e.preventDefault();items[items.length-1].focus();}
   else if(!e.shiftKey&&(i<0||i===items.length-1)){e.preventDefault();items[0].focus();}
 }
-function openHelp(){releaseControls();$('help').hidden=false;refreshModalState();invalidateFrame();}
-function closeHelp(){$('help').hidden=true;refreshModalState($('helpBtn'));invalidateFrame();}
+function openHelp(){releaseControls();$('menu').hidden=true;$('result').hidden=true;$('help').hidden=false;refreshModalState();invalidateFrame();}
+function closeHelp(){$('help').hidden=true;$('menu').hidden=false;refreshModalState($('helpBtn'));invalidateFrame();}
 let wakeSentinel=null,wakeRequest=null;
 const wantsWakeLock=()=>state==='play'&&!hold&&document.visibilityState==='visible';
 function syncWakeLock(){

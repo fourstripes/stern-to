@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="modulepreload" href="vendor/three.module.min.js">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="assets/game.css?v=20261123-simulation">
+<link rel="stylesheet" href="assets/game.css?v=20261123-anchors">
 </head>
 <body>
 <section id="startup" class="startup" role="status" aria-live="polite" aria-atomic="true">
@@ -61,8 +61,22 @@
       <div class="mooring-section">
         <button class="btn mooring-toggle" id="anchorsT" aria-controls="anchorBody" aria-expanded="false"><span class="mooring-label">Anchors</span><span class="mooring-status" id="anchorsStatus"></span></button>
         <div class="mooring-panel" id="anchorBody" role="group" aria-labelledby="anchorsT" hidden>
-          <div class="lnlist an2"><button class="btn" id="anchSel">Anchor · P</button><button class="btn" id="anchAct">Let go</button><div class="pair" id="chainRow" hidden><button class="btn" id="chIn" title="Heave the chain in" aria-label="Heave the chain in">−</button><button class="btn" id="chOut" title="Pay more chain out" aria-label="Pay more chain out">+</button></div><span class="lt" id="scopeTx" hidden></span></div>
-          <div class="anrow"><button class="anc" data-a="-1" aria-label="Port anchor"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M10.6 3h2.8v9.2h-2.8z M7 2.6h10v1.6H7z M5.2 12.6h13.6v2.4H5.2z M5.4 14.8l3 0 1.6 5.4-2.8.8z M18.6 14.8l-3 0-1.6 5.4 2.8.8z" fill="currentColor"/></svg></button><button class="anc" data-a="1" aria-label="Starboard anchor"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M10.6 3h2.8v9.2h-2.8z M7 2.6h10v1.6H7z M5.2 12.6h13.6v2.4H5.2z M5.4 14.8l3 0 1.6 5.4-2.8.8z M18.6 14.8l-3 0-1.6 5.4 2.8.8z" fill="currentColor"/></svg></button></div>
+          <label class="sr-only" for="anchSel">Choose anchors</label>
+          <select class="btn anchor-select" id="anchSel"><option value="0">Port</option><option value="1">Starboard</option><option value="2">Both</option></select>
+          <div class="anchor-actions"><button class="btn" id="anchDrop">Drop</button><button class="btn" id="anchWeigh" disabled>Bring in</button></div>
+          <span class="anchor-chain-label" id="chainLabel">Chain out (m)</span>
+          <div class="pair" id="chainRow" role="group" aria-labelledby="chainLabel">
+            <button class="btn" id="chIn" title="Bring in 1 m; hold to continue" aria-label="Bring in chain: tap 1 metre or hold" disabled>−</button>
+            <output id="anchorChain" aria-label="Selected anchor chain out in metres">0.0</output>
+            <button class="btn" id="chOut" title="Pay out 1 m; hold to continue" aria-label="Pay out chain: tap 1 metre or hold" disabled>+</button>
+          </div>
+          <span class="lt" id="scopeTx" role="status">Stowed</span>
+          <section id="anchorGoal" class="anchor-goal" aria-label="Final anchorage objective" hidden>
+            <div class="eyebrow">Final anchorage</div>
+            <div class="anchor-readout"><span>Target</span><strong><span id="anchorNeed">18</span> m</strong></div>
+            <div id="anchorProgress" class="anchor-progress" role="progressbar" aria-label="Anchorage chain paid out" aria-valuemin="0" aria-valuemax="18" aria-valuenow="0"><i></i></div>
+            <p id="anchorHint" role="status">Drop an anchor inside the ring.</p>
+          </section>
         </div>
       </div>
       <div class="mooring-section">
@@ -88,12 +102,6 @@
       </div>
     </section>
 
-  <section id="anchorGoal" class="anchor-goal" aria-label="Anchorage objective" hidden>
-    <div class="eyebrow">Final anchorage</div>
-    <div class="anchor-readout"><span>Chain out</span><strong><span id="anchorPaid">0.0</span> / <span id="anchorNeed">18</span> m</strong></div>
-    <div id="anchorProgress" class="anchor-progress" role="progressbar" aria-label="Chain paid out" aria-valuemin="0" aria-valuemax="18" aria-valuenow="0"><i></i></div>
-    <p id="anchorHint" role="status">Drop an anchor inside the ring.</p>
-  </section>
   <div id="fade"></div>
 
   <div class="sheet" id="menu" role="dialog" aria-modal="true" aria-labelledby="menuTitle" tabindex="-1">
@@ -124,8 +132,8 @@
         <div><kbd>←</kbd><kbd>→</kbd> rudder · <kbd>C</kbd> midships</div>
         <div><kbd>Space</kbd> all stop (engines) · <kbd>R</kbd> restart</div>
         <div><kbd>1</kbd>–<kbd>4</kbd> bow and stern lines · <kbd>5</kbd><kbd>6</kbd> springs</div>
-        <div><kbd>H</kbd> heave in · <kbd>J</kbd> slack · <kbd>G</kbd> let go</div>
-        <div><kbd>Z</kbd> anchor P / S / both · <kbd>X</kbd> let go, hold, weigh</div>
+        <div><kbd>H</kbd> heave lines in · <kbd>J</kbd> slack lines · <kbd>G</kbd> let lines go</div>
+        <div><kbd>Z</kbd> choose anchors · <kbd>X</kbd> drop · <kbd>B</kbd> bring in / stop</div>
         <div><kbd>F</kbd> fenders</div>
         <div><kbd>T</kbd> top view · <kbd>V</kbd> chase camera</div>
         <div><kbd>P</kbd> pause · <kbd>Esc</kbd> menu</div>
@@ -136,6 +144,7 @@
         <li>Hold ◀ or ▶ for the bow thruster.</li>
         <li>One finger on the water orbits the camera; two fingers twist and pinch.</li>
         <li>Tap Anchors, Lines or Fenders to open those controls. Tap the same heading again to close them.</li>
+        <li>In Anchors, choose Port, Starboard or Both, then Drop. Tap − or + for one metre of chain, or hold to continue. Bring in retrieves the selected anchors; Stop pauses retrieval.</li>
         <li>Tap a line on the Lines panel to throw it, then hold Heave in or Slack. They work every line unless you tap one to single it out.</li>
       </ul>
       <h3 class="eyebrow">Harbour navigation</h3>
@@ -146,7 +155,7 @@
         <li>Meeting head-on: both boats turn to starboard. Crossing: give way to a boat on your starboard side and pass behind it.</li>
         <li>Overtaking: keep clear until safely past. Leave room for slowing and turning, and act early if another boat is not keeping clear.</li>
         <li>All stop selects neutral; momentum remains. Use short astern bursts to brake, and rig fenders before coming alongside.</li>
-        <li>At the final anchorage, drop inside the ring, pay out the chain shown in the objective, then hold the chain and settle for three seconds. The mission finishes with a camera pan and zoom.</li>
+        <li>At the final anchorage, drop inside the ring and use + to reach the target shown in Anchors. Release the control and settle for three seconds. The chain holds automatically, and the mission finishes with a camera pan and zoom.</li>
       </ul>
       <button class="btn" id="minBtn" aria-pressed="false">Mirroring mode · off</button>
       <p class="mnote">Smaller, see-through controls for showing the game on a TV. They brighten while you touch them.</p>
@@ -169,7 +178,7 @@
   </div>
 </div>
 
-<script type="module" src="src/main.js?v=20261123-simulation"></script>
+<script type="module" src="src/main.js?v=20261123-anchors"></script>
 
 
 </body>

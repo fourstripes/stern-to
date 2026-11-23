@@ -23,7 +23,7 @@ function near(actual, expected, path = 'state') {
 }
 
 test('anchor deployment and fender work use the same simulation time at 30, 60 and 120 Hz', () => {
-  const setup = 'S.x=S.px=1000;S.y=S.py=1000;S.u=S.v=S.r=0;env.wk=0;env.sh=0;S.anchorCmd=true;S.fend=3';
+  const setup = 'S.x=S.px=1000;S.y=S.py=1000;S.u=S.v=S.r=0;env.wk=0;env.sh=0;dropAnchors();S.fend=3';
   const snapshot = '({time:S.t,bow:[S.bowX,S.bowY],anchors:S.anchors.map(a=>({side:a.side,x:a.x,y:a.y,length:a.L0,held:a.held})),fenders:S.fendN,crew:crew.map(c=>[c.position.x,c.position.z])})';
   const baseline = simulate(1000 / 60, setup, 3000, snapshot);
   assert.equal(baseline.anchors.length, 1);
@@ -43,7 +43,7 @@ test('pausing freezes pending deck work and mission weather', t => {
   const h = createGameHarness();
   t.after(() => h.close());
   h.click('go');
-  h.run('S.anchorCmd=true;S.fend=3;');
+  h.run('dropAnchors();S.fend=3;');
   h.click('pauseBtn');
   const snapshot = '({time:S.t,bow:S.bowX,anchors:S.anchors.length,fenders:S.fendN,wind:env.wk,swell:env.sh})';
   const before = h.read(snapshot);

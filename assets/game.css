@@ -11,7 +11,7 @@
 [hidden]{display:none!important}
 html,body{height:100%}
 body{margin:0;background:var(--sea);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;overflow:hidden;overscroll-behavior:none}
-#app{position:relative;height:100%;overflow:hidden;user-select:none;-webkit-user-select:none}
+#app{position:relative;height:100%;overflow:hidden;user-select:none;-webkit-user-select:none;--mooring-width:124px;--panel-left:max(10px,env(safe-area-inset-left,0px));--panel-right:max(10px,env(safe-area-inset-right,0px))}
 /* the sea is a tilted plane: camera sits a little south of overhead */
 #scene{position:absolute;left:-22%;right:-22%;top:-28%;bottom:-6%;transform:perspective(1300px) rotateX(17deg);will-change:transform}
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
@@ -148,8 +148,9 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
 /* results are a banner now: the game carries on underneath */
 #result{background:none;pointer-events:none;place-items:start center;}
 @media (min-width:821px){#result{place-items:start start;padding-left:max(14px,env(safe-area-inset-left,0px))}#result .card{margin:0}}
-#result{padding-top:calc(var(--top,110px) + 8px);overflow:visible}
-#result .card{pointer-events:auto;max-width:310px;padding:10px 12px;gap:7px;background:rgba(8,28,40,.9)}
+#result{padding-top:calc(var(--top,110px) + 8px);padding-bottom:calc(var(--bot,140px) + 8px);overflow:hidden;z-index:4}
+#result .card{pointer-events:auto;max-width:310px;max-height:max(0px,calc(100dvh - var(--top,110px) - var(--bot,140px) - 16px));min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:10px 12px;gap:7px;background:rgba(8,28,40,.9)}
+#result .card>*{flex-shrink:0}
 #result .card h1{font-size:22px}
 #result .card p{font-size:12.5px}
 #result .eyebrow{font-size:10.5px}
@@ -283,7 +284,7 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
 @media (min-width:621px) and (max-width:820px){.dock{grid-template-columns:auto auto 210px auto auto;padding:7px 8px;gap:5px 7px}.trio{grid-template-columns:1fr 1.3fr 1.15fr}.trio .btn{letter-spacing:.02em;font-size:11px;padding:2px}}
 @media (max-width:620px){.hud #pauseBtn,.hud #menuBtn{padding:1px 7px;font-size:10px}}
 /* mooring lines: a small panel up in the top corner, yacht bow-up */
-#gLines{position:absolute;top:calc(var(--top,31px) + 8px);right:max(10px,env(safe-area-inset-right,0px));z-index:2;grid-area:auto;
+#gLines{position:absolute;top:calc(var(--top,31px) + 8px);right:var(--panel-right);z-index:2;grid-area:auto;
   flex-direction:column;align-items:center;gap:6px;padding:8px 10px 10px;background:rgba(6,22,32,.92);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 #gLines .shipwrap{width:auto;height:auto}
 #gLines .shipwrap .ship{position:relative;left:auto;top:auto;margin:4px 6px;transform:none;width:46px;height:104px}
@@ -294,7 +295,7 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
 .dock{grid-template-areas:"moor port mid stbd";grid-template-columns:auto auto 290px auto}
 @media (min-width:621px) and (max-width:820px){.dock{grid-template-columns:auto auto 210px auto}}
 @media (orientation:landscape) and (max-height:520px) and (min-width:621px){.dock{grid-template-columns:auto auto 230px auto}#gLines{padding:5px 7px 7px}#gLines .shipwrap .ship{width:40px;height:90px}}
-@media (max-width:620px){.dock{grid-template-areas:"port mid stbd" "moor moor moor";grid-template-columns:auto minmax(0,1fr) auto}#gLines{right:8px;padding:6px 8px 8px}#gLines .shipwrap .ship{width:46px;height:108px}#gLines #actBox{width:74px}}
+@media (max-width:620px){.dock{grid-template-areas:"port mid stbd" "moor moor moor";grid-template-columns:auto minmax(0,1fr) auto}#gLines{padding:6px 8px 8px}#gLines .shipwrap .ship{width:46px;height:108px}#gLines #actBox{width:74px}}
 /* bump ahead / bump astern on each engine */
 .dock .lever{gap:10px}
 .dock .track{height:78px}
@@ -302,9 +303,6 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
 .bmp:hover{opacity:1}.bmp.on,.bmp:active{color:#061620;opacity:1}.lever.port .bmp.on,.lever.port .bmp:active{background:var(--port);border-color:var(--port)}.lever.stbd .bmp.on,.lever.stbd .bmp:active{background:var(--stbd);border-color:var(--stbd)}
 @media (max-width:620px){.dock .track{height:70px}.bmp{width:42px;min-height:24px}}
 @media (orientation:landscape) and (max-height:520px){.dock .track{height:48px}.bmp{min-height:20px;font-size:10px}}
-.anrow{display:flex;gap:10px;justify-content:center}
-.anc{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;border:2px solid var(--dim);background:var(--panel-solid);color:var(--ink);font-size:13px;line-height:1;padding:0;touch-action:none}
-.anc.t{background:var(--amber);border-color:var(--amber);color:#1c1300}.anc.f{background:var(--stbd);border-color:var(--stbd);color:#06210f}.anc.sel{box-shadow:0 0 0 3px rgba(255,181,71,.6)}
 /* the mooring panel: any corner; the control box keeps to the engines */
 .dock{grid-template-areas:"port mid stbd";grid-template-columns:auto 290px auto}
 @media (min-width:621px) and (max-width:820px){.dock{grid-template-columns:auto 230px auto}}
@@ -335,18 +333,19 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
 #rud::-moz-range-thumb{width:28px;height:28px;border-radius:50%;background:#061620;border:3px solid var(--amber);box-shadow:0 2px 6px rgba(0,0,0,.5)}
 #rud.mid::-webkit-slider-thumb{background:var(--amber)}
 #rud.mid::-moz-range-thumb{background:var(--amber)}
-#gLines{width:124px;max-height:calc(100% - var(--top,31px) - var(--bot,140px) - 20px);overflow-y:auto;overflow-x:hidden}
+#gLines{width:var(--mooring-width);max-width:calc(100% - var(--panel-left) - var(--panel-right));min-width:0;min-height:0;max-height:max(0px,calc(100% - var(--top,31px) - var(--bot,140px) - 20px));overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y;scroll-padding-block:8px;scrollbar-width:thin}
+#gLines::-webkit-scrollbar{width:6px}
 #gLines>*,#lnBody>*{flex-shrink:0}
-#gLines.c-tl{left:max(10px,env(safe-area-inset-left,0px));right:auto}
+#gLines.c-tl{left:var(--panel-left);right:auto}
 #gLines.c-br,#gLines.c-bl{top:auto;bottom:calc(var(--bot,140px) + 8px)}
-#gLines.c-bl{left:max(10px,env(safe-area-inset-left,0px));right:auto}
+#gLines.c-bl{left:var(--panel-left);right:auto}
 
 
 #lnBody{display:flex;flex-direction:column;align-items:center;gap:6px}
 .lnlist{display:flex;flex-direction:column;gap:4px;width:100%}
 .lnlist .btn{min-height:28px;padding:2px 4px;font-size:11px;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #gLines #actBox{width:100%}
-@media (max-width:620px){#gLines{width:112px}.lnlist .btn{min-height:30px;font-size:10.5px}.hud{gap:6px}.inst{gap:6px}.dmg{flex-basis:20px}.hud #pauseBtn,.hud #menuBtn{padding:1px 5px;letter-spacing:.04em}.nav{padding:1px 6px 1px 2px}}
+@media (max-width:620px){#app{--mooring-width:112px}.lnlist .btn{min-height:30px;font-size:10.5px}.hud{gap:6px}.inst{gap:6px}.dmg{flex-basis:20px}.hud #pauseBtn,.hud #menuBtn{padding:1px 5px;letter-spacing:.04em}.nav{padding:1px 6px 1px 2px}}
 /* middle column: thruster, rudder and the stop row spread evenly down the height of the levers */
 .g-mid{align-self:stretch;justify-content:space-between;gap:10px;padding-block:2px}
 .dock .rud{margin-block:2px}
@@ -370,15 +369,10 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
 #rud{pointer-events:none;--fa:50%;--fb:50%}
 #rud::-webkit-slider-runnable-track{background:linear-gradient(90deg,transparent calc(50% - 1.5px),rgba(234,242,244,.85) calc(50% - 1.5px),rgba(234,242,244,.85) calc(50% + 1.5px),transparent calc(50% + 1.5px)),linear-gradient(90deg,rgba(255,255,255,.14) var(--fa),var(--amber) var(--fa),var(--amber) var(--fb),rgba(255,255,255,.14) var(--fb))}
 #rud::-moz-range-track{background:linear-gradient(90deg,transparent calc(50% - 1.5px),rgba(234,242,244,.85) calc(50% - 1.5px),rgba(234,242,244,.85) calc(50% + 1.5px),transparent calc(50% + 1.5px)),linear-gradient(90deg,rgba(255,255,255,.14) var(--fa),var(--amber) var(--fa),var(--amber) var(--fb),rgba(255,255,255,.14) var(--fb))}
-.lnlist.an2{display:grid;grid-template-columns:1fr;gap:4px}
 #menu .mstart{grid-area:mstart;display:flex;flex-wrap:wrap;align-items:center;gap:5px;font-family:var(--display);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
 #menu .mstart .btn{min-height:26px;padding:2px 8px;font-size:11px;letter-spacing:.05em}
 #menu .mstart .btn[aria-pressed=true]{border-color:var(--amber);color:var(--amber);background:rgba(255,181,71,.1)}
 #menu .berths{margin-bottom:0}
-#chainRow .btn{min-height:30px;font-size:20px;font-weight:700;line-height:1;padding:0}
-#scopeTx{text-align:center;padding:0;font-size:10.5px;min-height:0}#scopeTx.ok{color:var(--stbd)}#scopeTx.bad{color:var(--port)}
-.anc.d{background:var(--port);border-color:var(--port);color:#1c0402;animation:ancp 1s ease-in-out infinite alternate}@keyframes ancp{to{opacity:.55}}
-@media (prefers-reduced-motion:reduce){.anc.d{animation:none}}
 #minBtn[aria-pressed=true]{border-color:var(--amber);color:var(--amber);background:rgba(255,181,71,.1)}
 .mnote{font-size:12.5px;margin-top:-6px!important}
 /* mirroring mode: smaller, see-through controls that brighten while you use them */
@@ -396,17 +390,28 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
 #menu .plays{grid-area:plays;display:flex;justify-content:center;align-items:center;gap:5px;margin:0;font-family:var(--display);font-size:12px;letter-spacing:.06em;color:var(--dim);white-space:nowrap}
 .plays b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
 /* toasts sit small and quiet under the top bar */
-#toast{top:calc(var(--top,31px) + 6px);bottom:auto;left:max(12px,env(safe-area-inset-left,0px));transform:none;max-width:min(320px,calc(100% - 160px));text-align:left;font-size:10.5px;letter-spacing:.07em;line-height:1.35;padding:4px 9px;border-radius:4px;background:rgba(6,20,30,.74);border-color:rgba(255,255,255,.1);transition:opacity .4s}
-#toast.r{left:auto;right:max(12px,env(safe-area-inset-right,0px));text-align:right}
-/* controls page on a short landscape screen: two columns */
-@media (orientation:landscape) and (max-height:520px){#help .card{max-width:680px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:8px 18px;padding:14px;align-items:start}
-  #help .eyebrow{grid-column:1/-1}#help .touchhint,#help .keys{grid-row:2/5}#help .touchhint{font-size:12px}#help .mnote{margin-top:0!important}#help .go{padding:9px}}
+#toast{top:calc(var(--top,31px) + 6px);bottom:auto;left:max(12px,env(safe-area-inset-left,0px));right:auto;transform:none;z-index:3;max-width:min(320px,max(0px,calc(100% - var(--mooring-width) - var(--panel-left) - var(--panel-right) - 12px)));text-align:left;font-size:10.5px;letter-spacing:.07em;line-height:1.35;padding:4px 9px;border-radius:4px;background:rgba(6,20,30,.74);border-color:rgba(255,255,255,.1);transition:opacity .4s;overflow-wrap:anywhere}
+#app:has(#gLines.c-tl,#gLines.c-bl) #toast{left:auto;right:max(12px,env(safe-area-inset-right,0px));text-align:right}
+/* Help sections stay in document order; long lists use columns on short screens. */
+#help h3{margin:0}
+#help h3+.touchhint{display:block}
+@media (orientation:landscape) and (max-height:520px){
+  #help .card{max-width:680px;gap:10px;padding:14px}
+  #help .touchhint{columns:2;column-gap:28px;font-size:12px}
+  #help .touchhint li{break-inside:avoid;padding-right:4px}
+  #help .mnote{margin-top:0!important}
+  #help .go{padding:9px}
+}
 
 /* Keyboard access and touch targets share the existing bridge layout. */
 #app{height:100%;height:100dvh}
 .hud{padding-top:max(4px,env(safe-area-inset-top,0px))}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
-#menu,#help{place-items:safe center}
+#menu,#help{place-items:safe center;overscroll-behavior:contain;touch-action:pan-y}
+#menu{z-index:10}#help{z-index:11}
+#menu .btn,#help .btn,#result .btn{touch-action:manipulation}
+#app:has(#result:not([hidden])) #gLines{visibility:hidden}
+#app:has(#menu:not([hidden]),#help:not([hidden]),#result:not([hidden])) #toast{visibility:hidden}
 #helpTitle{margin:0;font-weight:600}
 .track:focus-visible,#rud:focus-visible{outline:2px solid var(--amber);outline-offset:4px}
 #gl:focus-visible{outline:2px solid var(--amber);outline-offset:-3px}
@@ -419,14 +424,13 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
   .dock .bmp{min-height:40px;min-width:44px}
   .dock .trio .btn,.dock .btn.big{min-height:44px}
   .dock .thr .btn{width:44px;height:44px}
-  #gLines{width:148px}
+  #app{--mooring-width:148px}
 
-  #gLines .lnlist .btn,#gLines #actBox .btn,#chainRow .btn{min-height:40px;font-size:12px}
+  #gLines .lnlist .btn,#gLines #actBox .btn{min-height:40px;font-size:12px}
   #gLines .shipwrap .ship{width:78px;height:212px}
   #gLines .shipwrap .ln{width:44px;height:44px;font-size:14px}
   #gLines .shipwrap .ln.sp{margin-left:-22px}
-  #gLines .anc{width:44px;height:44px}
-  #menu .btn,#help .btn{min-height:44px}
+  #menu .btn,#help .btn,#result .acts .btn{min-height:44px}
 }
 
 /* Phone instruments stay on one line; navigation and menu actions retain their space. */
@@ -450,23 +454,22 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
 
 /* Compact phone panels without scaling down their touch targets. */
 @media (max-width:620px) and (orientation:portrait){
-  #gLines{width:116px;padding:6px 7px 8px;gap:4px}
+  #app{--mooring-width:116px}
+  #gLines{padding:6px 7px 8px;gap:4px}
 
   #gLines .lnlist .btn,#gLines #actBox .btn{min-height:40px;font-size:11px;padding:2px 3px;letter-spacing:.03em}
   #lnBody{width:100%;gap:4px}
-  #gLines .anrow{width:100%;justify-content:space-between;gap:8px}
   #gLines .shipwrap{width:100%;height:176px}
   #gLines .shipwrap .ship{width:100%;height:176px;margin:0}
   #gLines .shipwrap .ship>svg{inset:4px auto auto calc(50% - 28px);width:56px;height:168px}
-  #gLines .shipwrap .ln,#gLines .anc{position:relative;display:grid;place-items:center;isolation:isolate;flex:none;width:44px;height:44px;padding:0;border:0;background:transparent;box-shadow:none;font-size:13px}
+  #gLines .shipwrap .ln{position:relative;display:grid;place-items:center;isolation:isolate;flex:none;width:44px;height:44px;padding:0;border:0;background:transparent;box-shadow:none;font-size:13px}
   #gLines .shipwrap .ln{position:absolute}
-  #gLines .shipwrap .ln::before,#gLines .anc::before{content:"";position:absolute;inset:6px;border:2px solid var(--dim);border-radius:50%;background:var(--panel-solid);z-index:-1;pointer-events:none}
+  #gLines .shipwrap .ln::before{content:"";position:absolute;inset:6px;border:2px solid var(--dim);border-radius:50%;background:var(--panel-solid);z-index:-1;pointer-events:none}
   #gLines .shipwrap .ln:hover::before{border-color:var(--ink)}
   #gLines .shipwrap .ln.q::before{border-color:var(--amber)}
-  #gLines .shipwrap .ln.t::before,#gLines .anc.t::before{background:var(--amber);border-color:var(--amber)}
-  #gLines .shipwrap .ln.f::before,#gLines .anc.f::before{background:var(--stbd);border-color:var(--stbd)}
-  #gLines .anc.d::before{background:var(--port);border-color:var(--port)}
-  #gLines .shipwrap .ln.sel::before,#gLines .anc.sel::before{box-shadow:0 0 0 3px rgba(255,181,71,.6)}
+  #gLines .shipwrap .ln.t::before{background:var(--amber);border-color:var(--amber)}
+  #gLines .shipwrap .ln.f::before{background:var(--stbd);border-color:var(--stbd)}
+  #gLines .shipwrap .ln.sel::before{box-shadow:0 0 0 3px rgba(255,181,71,.6)}
   #gLines .ln[data-i="0"]{left:0;top:0}#gLines .ln[data-i="1"]{right:0;top:0}
   #gLines .ln[data-i="2"]{left:0;bottom:0}#gLines .ln[data-i="3"]{right:0;bottom:0}
   #gLines .shipwrap .ln.sp{margin-left:-22px}
@@ -503,8 +506,24 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
 #gLines .fender-options .btn{min-height:44px;padding:4px 2px;font-size:11px;letter-spacing:0;white-space:nowrap}
 #gLines .fender-options .btn[aria-pressed=true]{color:var(--amber);border-color:var(--amber);background:rgba(255,181,71,.1)}
 
-/* Only the final mission leg needs a persistent chain objective. */
-.anchor-goal{position:absolute;top:calc(var(--top,31px) + 8px);left:max(10px,env(safe-area-inset-left,0px));width:min(224px,calc(100% - 150px));padding:9px 10px;z-index:2;border:1px solid var(--line);border-radius:8px;background:var(--panel);pointer-events:none}
+/* One anchor panel: select, actions, chain control, then the mission objective. */
+#app:has(#anchorsT[aria-expanded=true]){--mooring-width:156px}
+#gLines:has(#anchorsT[aria-expanded=true]){padding-inline:6px}
+#gLines .anchor-select{width:100%;min-width:0;min-height:44px;padding:7px 8px;font-size:16px;letter-spacing:0;text-transform:none}
+#gLines .anchor-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;width:100%}
+#gLines .anchor-actions .btn{min-height:44px;min-width:0;padding:4px 2px;font-size:12px;line-height:1.15;letter-spacing:.01em}
+.anchor-chain-label{font-family:var(--display);font-size:10px;line-height:1.2;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+#chainRow{width:100%;grid-template-columns:44px minmax(0,1fr) 44px;gap:3px;align-items:center}
+#chainRow .btn{width:44px;height:44px;min-height:44px;padding:0;font-size:22px;font-weight:700;line-height:1;letter-spacing:0}
+#anchorChain{min-width:0;font-family:var(--display);font-size:11.5px;font-weight:600;line-height:1.25;font-variant-numeric:tabular-nums;letter-spacing:0;text-align:center;white-space:pre-line}
+#scopeTx{width:100%;min-height:0;padding:0;text-align:center;font-size:11px;line-height:1.3;letter-spacing:.02em;white-space:normal;overflow-wrap:anywhere}
+#scopeTx.ok{color:var(--stbd)}#scopeTx.bad{color:var(--port)}
+#gLines .btn:disabled{opacity:.45;cursor:default;background:rgba(255,255,255,.03);border-color:var(--line);color:var(--dim)}
+#gLines .mooring-toggle,#gLines .mooring-tools .lt,#gLines .anchor-select,#gLines .anchor-actions .btn,#gLines .fender-options .btn{touch-action:manipulation}
+@media (pointer:coarse){#gLines .mooring-tools .lt{min-width:44px;min-height:44px}}
+
+/* The objective shares normal flow and scrolling with the anchor controls. */
+.anchor-goal{width:100%;min-width:0;padding-top:8px;border-top:1px solid var(--line)}
 .anchor-goal .eyebrow{font-size:10px;letter-spacing:.1em;margin-bottom:3px}
 .anchor-readout{display:flex;align-items:baseline;justify-content:space-between;gap:6px;font-family:var(--display);font-size:13px}
 .anchor-readout strong{color:var(--amber);white-space:nowrap;font-variant-numeric:tabular-nums}

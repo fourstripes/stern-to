@@ -33,7 +33,7 @@ Cruise speed is preserved. Before this pass the tender's full-lock turn diameter
 
 ## Mooring and the final anchorage
 
-Weigh is an automatic 0.8 m/s retrieval command. Hold chain pauses it, and manual Heave or Slack takes over. An anchor cannot disappear aboard while still far from the hawse. Input ownership is cleared when its target disappears, preserving independent engine and thruster controls.
+Bring in is an automatic 0.8 m/s retrieval command for the selected anchors. Stop pauses it, and the dedicated −/+ chain controls take over. An anchor cannot disappear aboard while still far from the hawse. Input ownership is cleared when its target disappears, preserving independent line, engine and thruster controls.
 
 Shore service now requires two actual shore lines. Two anchors alone cannot satisfy fuel or shipyard service. Crew movement, anchor deployment and fender protection advance on the fixed simulation clock, with matching results at 30, 60 and 120 Hz display rates.
 
@@ -41,10 +41,12 @@ The final anchorage previously depended on a hidden horizontal chain-stretch con
 
 1. The anchor lies inside the marked circle.
 2. At least 13 m, 18 m or 27 m of chain is out for the tender, superyacht or megayacht respectively.
-3. The chain is held, with automatic retrieval stopped.
+3. The chain is held automatically after adjustment, with retrieval stopped.
 4. The vessel settles without dragging for three continuous seconds.
 
-The goal panel shows actual chain to one decimal place without rounding a short length up to the target. It also says whether to move the anchor, pay out chain, hold it or let the boat settle. A secure second anchor can satisfy the goal even if the other anchor is dragging. Interrupted settling resets progress.
+The selected-chain readout shows actual chain to one decimal place without rounding a short length up to the target. The final goal, target and progress now sit inside the same Anchors panel, preventing the previous collision when that panel was moved to the top-left corner. A secure second anchor can satisfy the goal even if the other anchor is dragging. Interrupted settling resets progress.
+
+The compact anchor controls use one Port/Starboard/Both selector, Drop, Bring in/Stop and −/+. A drop starts with 3 m of automatically held chain. Each tap adjusts one metre; a sustained hold continues adjustment. The tender has a single Bow option. Line actions remain in Lines, and changing the operation selector does not change which anchor can qualify for the mission.
 
 Success starts a 4.5-second camera pan and zoom, then displays the mission result. Controls are temporarily held during the reveal, and Keep playing restores the prior camera. Reduced-motion preference skips the automatic camera movement.
 
