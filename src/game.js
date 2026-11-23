@@ -1,5 +1,8 @@
 import * as T3 from '../vendor/three.module.min.js';
 import { FIXED_STEP, MAX_FRAME_TIME, planSimulationSteps, renderPixelRatio, AdaptiveQuality } from './runtime.js';
+import { createVesselPhysics, vesselForces, bodyAcceleration, resolveContact } from './physics.js?v=20261123-simulation';
+import { planTrafficStep, planWaterRoute, segmentClear, navigationAdvice } from './navigation.js?v=20261123-simulation';
+import { buildWaves, sampleWater, stepDampedSpring, foamParameters, waterQuality, WATER_GLSL } from './water.js?v=20261123-simulation';
 
 export function startGame(lifecycle = {}) {
 const $=id=>document.getElementById(id);
@@ -11,14 +14,14 @@ const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* ---------- ship ---------- */
 const HULL=[[25,0],[19,2.9],[10,4.5],[-5,4.7],[-25,4.3],[-25,-4.3],[-5,-4.7],[10,-4.5],[19,-2.9]];
 const SHIPS={
- tender:{name:'Tender',spec:'12 m · 9 t · 2 × 300 kW · about 28 kn',L:12,B:3.6,m:9e3,tA:16e3,tS:9e3,thr:1.6e3,cd:.3},
+ tender:{name:'Tender',spec:'12 m · 9 t · 2 × 300 kW · about 28 kn',L:12,B:3.6,m:9e3,tA:16e3,tS:9e3,thr:1.6e3,cd:.3,steeringSpeed:10,rudderScale:3},
  super:{name:'Superyacht',spec:'50 m · 500 t · 2 × 1,200 kW · about 16 kn',L:50,B:9.4,m:5e5,tA:180e3,tS:125e3,thr:30e3},
  ls:{name:'Megayacht',spec:'74 m · 1,500 t · 2 × 2,000 kW · about 17 kn',L:74,B:12.6,m:1.5e6,tA:360e3,tS:245e3,thr:55e3,cd:.9}};
 // everything below scales from the 50 m boat: SL length, SB beam, MR mass, GEO the harbour, LK line strength
-let shipId='super',LEN,BEAM,SL,SB,MR,GEO,LK,MX,MY,MI,IZ,T_AHD,T_AST,PROP_Y,THR_F,THR_X;
+let shipId='super',LEN,BEAM,SL,SB,MR,GEO,LK,physics,THR_X;
 function setShipParams(id){
   const q=SHIPS[id];shipId=id;LEN=q.L;BEAM=q.B;SL=LEN/50;SB=BEAM/9.4;MR=q.m/5e5;GEO=id==='ls'?1.45:1;LK=Math.pow(MR,.67); // the harbour grows to take the 74 m
-  MX=1.1*q.m;MY=1.6*q.m;MI=1.3*q.m;IZ=1.2e8*MR*SL*SL;T_AHD=q.tA;T_AST=q.tS;THR_F=q.thr;PROP_Y=3.2*SB;THR_X=20*SL;
+  physics=createVesselPhysics(q);THR_X=physics.thrusterArm;
 }
 setShipParams('super');
 function poly(x,y,psi,l,b){const cs=Math.cos(psi),sn=Math.sin(psi),sl=l/50,sb=b/9.4;return HULL.map(([a,d])=>{a*=sl;d*=sb;return[x+a*cs-d*sn,y+a*sn+d*cs];});}
@@ -33,13 +36,16 @@ const OWN={hull:'#fbfcfc',side:'#cdd6db',trim:'#0f2a3a',deck:'#d2b07c',s1:'#e8ed
 const LEVELS=[
  {name:'Fuel quay',sub:'Side-to in an open basin. Either way round.',wind:[5,270],swell:[.2,180],start:[-30,95,-90],par:170,
   slip:{x:0,y:-33.6,h:0,len:64,wid:13.5,either:true},
+  navigation:[[-60,30],[0,30],[60,30]],harbourZones:[[-210,-45,210,55]],
   build(o){o.land(-700,-240,700,-40);o.boat(-62,-34.6,0,38,8);o.boat(64,-34.3,180,44,8.6);o.boat(150,-35,0,30,7);o.boat(-140,-35,0,34,7.4);}},
  {name:'The row',sub:'Stern-to between two neighbours, wind on the beam.',wind:[10,270],swell:[.2,160],start:[115,75,180],par:260,
   slip:{x:0,y:-12,h:90,len:58,wid:14.6},
+  navigation:[[0,55],[60,55],[-60,55],[90,85]],harbourZones:[[-110,-45,110,65]],
   build(o){o.land(-700,-240,700,-40);
    [[-12.6,-14,46,9.4],[12.8,-11,54,10],[-25.5,-16,42,8.8],[-38,-18,38,8.2],[26.5,-13,50,9.6],[40,-15,46,9.2],[53,-18,40,8.6]].forEach(b=>o.boat(b[0],b[1],90,b[2],b[3]));}},
  {name:'Inner basin',sub:'Up the channel, turn in the basin, back between the piers.',wind:[15,315],swell:[.4,180],start:[2,205,-90],par:440,
   slip:{x:118,y:-121.5,h:90,len:58,wid:13.4},
+  navigation:[[0,160],[0,-70],[40,-85],[118,-85],[180,-85]],harbourZones:[[-20,-155,220,160]],
   build(o){o.land(-700,-190,700,-150);o.land(-700,-150,-18,140);o.land(18,-40,700,140);o.land(215,-150,700,-40);
    [78,94,110,126,142,158].forEach(x=>o.pier(x-1.2,-150,x+1.2,-110));
    o.boat(86,-128,90,34,8);o.boat(102,-127,90,36,8.4);o.boat(134,-126,90,38,8.6);o.boat(150,-129,90,30,7.6);
@@ -52,6 +58,8 @@ const LEVELS=[
          {name:"Owner's berth",dur:14,doing:'Owner flying in',done:'Owner aboard',slip:{x:0,y:-229.5,h:-90,len:58,wid:13.4}},
          {name:'Anchorage',dur:3,anchor:true,doing:'Anchor down',done:'Anchored',slip:{x:330,y:332,h:0,len:48,wid:48,either:true,circle:true}}],
   slip:{x:-60,y:206.6,h:0,len:64,wid:13.5,either:true},
+  navigation:[[-280,270],[-120,245],[80,245],[270,245],[290,110],[290,0],[260,0],[290,-110],[285,-250],[220,-275],[150,-275],[85,-275],[0,-275],[-70,-275],[-270,-370],[140,-370],[330,300]],
+  harbourZones:[[-230,190,235,255],[160,-165,335,165],[-150,-350,240,-195]],
   build(o){
    o.land(-220,-200,150,200);o.land(150,-200,220,-8);o.land(150,8,220,200);        // the island, with the yard dock cut into its east side
    o.land(-140,-330,90,-322);o.land(-140,-322,-132,-200);                            // breakwater round the north basin
@@ -61,8 +69,8 @@ const LEVELS=[
    o.boat(225.5,-110,90,40,8.6);o.boat(225.2,120,-90,34,8);                          // alongside the east face
    o.isle(419,373,30);
    // traffic: a boat crosses the yard entrance as you arrive, another comes into the north basin as you leave with the owner
-   o.mover(262,-330,90,30,7,{wp:[[262,-330],[290,-70],[290,70],[262,330]],spd:4.2,stage:1,near:[181,0,190],say:'Vessel crossing the yard entrance · give way'});
-   o.mover(420,-268,180,34,7.6,{wp:[[420,-268],[200,-262],[40,-262]],spd:3.4,stage:3,leave:[0,-229.5,14],say:'Inbound vessel in the channel · keep clear'});
+   o.mover(272,-360,90,30,7,{wp:[[272,-360],[290,-110],[290,110],[280,360]],spd:4.2,stage:1,near:[181,0,190],name:'Coastal launch'});
+   o.mover(440,-285,180,34,7.6,{wp:[[440,-285],[220,-285],[80,-285],[-80,-285]],spd:3.4,stage:3,leave:[0,-229.5,14],name:'Inbound launch'});
    // IALA region A lateral marks (red to port entering), plus an east cardinal off the island
    o.buoy(232,22,'red');o.buoy(232,-22,'green');
    o.buoy(110,-212,'red');o.buoy(110,-312,'green');o.buoy(170,-205,'red');o.buoy(170,-318,'green');
@@ -70,17 +78,17 @@ const LEVELS=[
   }}
 ];
 let buoys=[],obstacles=[],lvI=0,LV=LEVELS[0],slip=LV.slip,stops=null,allSlips=[];
+let navigationPolygons=[],navigationJunctions=[],trafficPolygons=[],navCache={key:'',path:[],index:0,check:0,advice:{text:'',speedLimit:null},blocked:false,finalTarget:null};
 /* mooring: fairleads on the yacht (body coords), bollards on the dock, two dockhands */
 // kind: 1 leads forward, -1 leads aft, 2 forward spring (leads aft from forward of midships), -2 aft spring (leads forward from the quarter)
 const LINE_DEF=[['Port bow',21,-1.9,1],['Starboard bow',21,1.9,1],['Port stern',-24,-3.9,-1],['Starboard stern',-24,3.9,-1],['Forward spring',9,0,2],['Aft spring',-11,0,-2]];
-let lines=[],queue=[],bollards=[],hands=[];
+let lines=[],bollards=[],hands=[];
 const sendHand=b=>{
   if(hands.some(h=>h.tx===b.x&&h.ty===b.y))return;
   const busy=h=>lines.some(l=>(l.state==='throw'||l.state==='haul')&&l.bol&&l.bol.x===h.tx&&l.bol.y===h.ty);
   let best=null,bd=1e9;for(const h of hands){if(busy(h))continue;const d=Math.hypot(h.x-b.x,h.y-b.y);if(d<bd){bd=d;best=h;}}
   if(best){best.tx=b.x;best.ty=b.y;best.h=b.h;}
 };
-const handAt=b=>hands.some(h=>Math.hypot(h.x-b.x,h.y-b.y)<.9);
 let sel=-1,haul=0,aSel=null,mooringSection=null; // selected line; +1 heave in, -1 slack, while held
 let FEND_D=.75; // how far a rigged fender holds the hull off
 const fendOK=sd=>{let n=0;for(let i=0;i<4;i++)if(i+1<=S.fendN[sd]+.001&&!S.fPop[i*2+sd])n++;return n;};
@@ -145,8 +153,9 @@ function cycleAnchSel(){
 function anchorAct(){
   if(state!=='play')return;
   if(!S.anchors.length){if(!S.anchorCmd){S.anchorCmd=true;toast('Anchor party to the bow',1300);}return;}
-  if(S.anchors.some(a=>!a.held)){S.anchors.forEach(a=>a.held=true);const L=Math.max(...S.anchors.map(a=>a.L0));toast('Chain held · '+Math.round(L)+' m out · '+chainMark(L),1800);return;}
-  releaseMooringInputs();const n=S.anchors.length;S.anchors.forEach(a=>S.weigh[a.side]=1);S.anchors=[];aSel=null;updateMooringUI();toast(n>1?'Anchors aweigh':'Anchor aweigh',1300);
+  if(S.anchors.some(a=>!a.held)){S.anchors.forEach(a=>{a.held=true;a.weighing=false;});const L=Math.max(...S.anchors.map(a=>a.L0));toast('Chain held · '+Math.round(L)+' m out · '+chainMark(L),1800);return;}
+  releaseMooringInputs();const stop=S.anchors.some(a=>a.weighing);
+  S.anchors.forEach(a=>a.weighing=!stop);updateMooringUI();toast(stop?'Chain held':S.anchors.length>1?'Weighing anchors · use Hold chain to pause':'Weighing anchor · use Hold chain to pause',1800);
 }
 function anchorTap(sd){
   if(state!=='play')return;if(shipId==='tender')sd=0;
@@ -155,7 +164,7 @@ function anchorTap(sd){
 }
 function letGo(){if(state!=='play')return;
   releaseMooringInputs();
-  if(aSel!=null){const A=S.anchors.find(a=>a.side===aSel);if(A){S.anchors=S.anchors.filter(a=>a!==A);S.weigh[A.side]=1;toast('Anchor aweigh',1200);}aSel=null;updateMooringUI();return;}
+  if(aSel!=null){const A=S.anchors.find(a=>a.side===aSel);if(A){A.held=true;A.weighing=!A.weighing;toast(A.weighing?'Weighing anchor · use Hold chain to pause':'Chain held',1800);}updateMooringUI();return;}
   if(sel>=0&&lines[sel].state!=='stowed'){lines[sel].state='stowed';toast(lines[sel].name+' line let go',1200);sel=-1;updateMooringUI();return;}
   let n=0;for(const ln of lines)if(ln.state!=='stowed'){ln.state='stowed';n++;}if(n)toast('All lines let go',1200);sel=-1;updateMooringUI();}
 const env={wk:5,wFrom:270,sh:.2,sFrom:180,T:5.5,lam:48};
@@ -170,9 +179,11 @@ function buildLevel(i){
     pier:(a,b,d,e)=>{a*=G;b*=G;d*=G;e*=G;add('pier',[[a,b],[d,b],[d,e],[a,e]]);},
     isle:(x,y,r)=>{x*=G;y*=G;r*=G;const P=[];for(let k=0;k<12;k++){const a=k/12*TAU;P.push([x+Math.cos(a)*r,y+Math.sin(a)*r]);}add('isle',P,{ix:x,iy:y,ir:r});},
     boat:(x,y,h,l,b)=>{x*=G;y*=G;l*=G;b*=G;add('boat',poly(x,y,h*D2R,l,b),{x,y,psi:h*D2R,l,b,look:LOOKS[n++%LOOKS.length]});},
-    mover:(x,y,h,l,b,tr)=>{x*=G;y*=G;l*=G;b*=G;tr={...tr,wp:tr.wp.map(q=>[q[0]*G,q[1]*G]),origin:{x,y,psi:h*D2R},st:'wait',i:1,v:0,stopT:0};add('boat',poly(x,y,h*D2R,l,b),{x,y,psi:h*D2R,l,b,look:LOOKS[n++%LOOKS.length],tr});},
+    mover:(x,y,h,l,b,tr)=>{x*=G;y*=G;l*=G;b*=G;tr={...tr,id:'traffic-'+n,wp:tr.wp.map(q=>[q[0]*G,q[1]*G]),origin:{x,y,psi:h*D2R},st:'wait',i:1,v:0,stopT:0,memory:{}};add('boat',poly(x,y,h*D2R,l,b),{x,y,psi:h*D2R,l,b,look:LOOKS[n++%LOOKS.length],tr});},
     buoy:(x,y,t)=>{buoys.push({x:x*G,y:y*G,t});}
   });
+  navigationPolygons=obstacles.filter(o=>!o.tr).map(o=>o.p);trafficPolygons=navigationPolygons;
+  navigationJunctions=(LV.navigation||[]).map(p=>[p[0]*G,p[1]*G]);
   // bollards along every quay and pier edge near the berth
   bollards=[];
   for(const o of obstacles){
@@ -195,11 +206,8 @@ function buildLevel(i){
 let S,state='menu',T=0,parts=[],toastT=0;
 /* wash particles: 0 aerated water (soft, long lived), 1 foam clumps, 2 contact rings */
 const MAXP=innerWidth<600?2600:4500;
-const spray=(x,y,vx,vy,vz,size)=>{if(parts.length<MAXP)parts.push({k:3,x,y,vx,vy,z:.3,vz,size,life:5,max:5,g:0,s:0,v:0});};
 const spawn=(k,x,y,vx,vy,size,life,g,w)=>{if(parts.length<MAXP)parts.push({k,x,y,vx,vy,size,life,max:life,g,w:w||0,s:Math.random()*6.28,v:(Math.random()*4)|0});};
 const sprite=draw=>{const n=64,s=document.createElement('canvas');s.width=s.height=n;draw(s.getContext('2d'),n);return s;};
-const SP_SOFT=sprite((g,n)=>{const r=g.createRadialGradient(n/2,n/2,0,n/2,n/2,n/2);r.addColorStop(0,'rgba(165,238,228,1)');r.addColorStop(.45,'rgba(120,218,216,.55)');r.addColorStop(1,'rgba(110,210,214,0)');g.fillStyle=r;g.fillRect(0,0,n,n);});
-const SP_FOAM=[0,1,2,3].map(()=>sprite((g,n)=>{for(let i=0;i<5;i++){const a=Math.random()*6.28,d=Math.random()*n*.16,x=n/2+Math.cos(a)*d,y=n/2+Math.sin(a)*d,r=n*(.2+Math.random()*.12),q=g.createRadialGradient(x,y,0,x,y,r);q.addColorStop(0,'rgba(255,255,255,.75)');q.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=q;g.fillRect(0,0,n,n);}}));
 function reset(){
   releaseControls();resetFrameClock();
   toast.q=[];clearTimeout(toast.h);toast.h=null;toastT=0;$('toast').classList.add('off');
@@ -211,16 +219,17 @@ function reset(){
   S={x:s[0]*GEO,y:s[1]*GEO,stage:0,svc:null,dmgBank:0,mode:'arrive',voyage:false,legT0:0,legHits0:0,passing:false,fend:0,fendN:[0,0],fStress:[0,0],fSq:[0,0],fPop:[0,0,0,0,0,0,0,0],boom:null,bowX:19.5,weigh:{'-1':0,'0':0,'1':0},anchors:[],anchSel:0,anchorCmd:false,fire:null,done:false,wreck:false,psi:s[2]*D2R,u:0,v:0,r:0,lever:[0,0],rpm:[0,0],gear:[0,0],clutch:[0,0],thr:0,thrAct:0,rud:0,
      damage:0,hits:0,t:0,hold:0,inPos:false,lastTouch:-9,roll:0,shake:0};
   parts=[];$('rud').value=0;cam.x=S.x;cam.y=S.y;
-  lines=LINE_DEF.map((d,i)=>({i,name:d[0],kind:d[3],a:d[1]*SL,b:d[2]*SB,state:'stowed',bol:null,L0:0,t:0,ten:0,strain:0,fx:S.x,fy:S.y,ready:false,dist:999,prog:0,reach:0,good:false}));queue=[];S.bowY=0;sel=-1;haul=0;aSel=null;$('result').hidden=true;
+  lines=LINE_DEF.map((d,i)=>({i,name:d[0],kind:d[3],a:d[1]*SL,b:d[2]*SB,state:'stowed',bol:null,L0:0,t:0,ten:0,strain:0,fx:S.x,fy:S.y,ready:false,dist:999,prog:0,reach:0,good:false}));S.bowY=0;sel=-1;haul=0;aSel=null;$('result').hidden=true;
   setMooringSection(null);
   if(stops){slip=stops[0].slip;buildSlipMarker();}
   resetTraffic();homeHands();resetVisuals();
 }
 function resetTraffic(){
   for(const o of obstacles)if(o.tr){
-    const tr=o.tr;Object.assign(tr,{st:'wait',i:1,v:0,stopT:0,yield:false,said:false});
+    const tr=o.tr;Object.assign(tr,{st:'wait',i:1,v:0,stopT:0,yield:false,said:false,memory:{},notice:'',noticeT:0});
     Object.assign(o,tr.origin);o.cx=o.x;o.cy=o.y;o.p=poly(o.x,o.y,o.psi,o.l,o.b);
   }
+  navCache={key:'',path:[],index:0,check:0,advice:{text:'',speedLimit:null},blocked:false,finalTarget:null};updateNavigation(0);
 }
 function homeHands(){
   hands=[];
@@ -228,6 +237,32 @@ function homeHands(){
     if(hands.length<2&&!hands.some(h=>Math.hypot(h.x-b.x,h.y-b.y)<6))hands.push({x:b.x,y:b.y,tx:b.x,ty:b.y,h:b.h});
 }
 function setStop(i){slip=stops[i].slip;S.inPos=false;S.hold=0;buildSlipMarker();homeHands();}
+const playerContact=()=>{const c=Math.cos(S.psi),s=Math.sin(S.psi);return{id:'player',x:S.x,y:S.y,heading:S.psi,length:LEN,beam:BEAM,vx:S.u*c-S.v*s,vy:S.u*s+S.v*c};};
+const trafficContact=o=>({id:o.tr.id,x:o.x,y:o.y,heading:o.psi,length:o.l,beam:o.b,speed:o.tr.st==='go'?o.tr.v:0});
+const inHarbour=(x,y)=>(LV.harbourZones||[]).some(([x0,y0,x1,y1])=>x>=x0*GEO&&x<=x1*GEO&&y>=y0*GEO&&y<=y1*GEO);
+function updateNavigation(dt=0){
+  if(!S)return;
+  const goal=S.mode==='depart'?[LV.start[0]*GEO,LV.start[1]*GEO]:[slip.x,slip.y],key=lvI+'|'+shipId+'|'+S.stage+'|'+S.mode;
+  const here=[S.x,S.y],clearance=BEAM*.5+.6*GEO;
+  navCache.check-=dt;
+  if(navCache.key!==key||navCache.check<=0){
+    const current=navCache.path[navCache.index];
+    if(navCache.key!==key||!current||!segmentClear(here,current,navigationPolygons,clearance)){
+      navCache.path=planWaterRoute(here,goal,navigationJunctions,navigationPolygons,clearance);navCache.index=0;navCache.key=key;
+      navCache.blocked=!navCache.path.length;navCache.waitAt=[...here];
+    }
+    navCache.finalTarget=goal;navCache.check=.5;
+    // A visible next leg can be taken directly; never cut a corner through land.
+    while(navCache.index<navCache.path.length-1&&segmentClear(here,navCache.path[navCache.index+1],navigationPolygons,clearance))navCache.index++;
+    navCache.advice=navigationAdvice(playerContact(),obstacles.filter(o=>o.tr).map(trafficContact),{harbour:inHarbour(S.x,S.y),speedLimit:6});
+  }
+}
+function navigationStatus(){
+  const finalTarget=navCache.finalTarget||[slip.x,slip.y],waypoint=navCache.path[navCache.index]||navCache.waitAt||finalTarget;
+  let remaining=Math.hypot(waypoint[0]-S.x,waypoint[1]-S.y);
+  for(let i=navCache.index+1;i<navCache.path.length;i++)remaining+=Math.hypot(navCache.path[i][0]-navCache.path[i-1][0],navCache.path[i][1]-navCache.path[i-1][1]);
+  return{waypoint,finalTarget,leg:navCache.index+1,remaining,blocked:navCache.blocked,advice:navCache.advice.text,speedLimit:navCache.advice.speedLimit,overspeed:!!navCache.advice.overspeed,encounter:navCache.advice.kind||'clear'};
+}
 const windTo=()=>{const a=(env.wFrom+180)*D2R+.12*Math.sin(T*.17);return[Math.sin(a),-Math.cos(a)];};
 const windSpd=()=>env.wk/KN*(1+.22*Math.sin(T*.31+1.3)+.1*Math.sin(T*.83));
 const swellTo=()=>{const a=(env.sFrom+180)*D2R;return[Math.sin(a),-Math.cos(a)];};
@@ -259,23 +294,19 @@ function collide(){
     if(k){px/=k;py/=k;}else{let mn=1e9;for(const v of hp){const d=v[0]*nx+v[1]*ny;if(d<mn){mn=d;px=v[0];py=v[1];}}}
     S.x+=nx*m.depth;S.y+=ny*m.depth;
     const cs=Math.cos(S.psi),sn=Math.sin(S.psi);
-    let vx=S.u*cs-S.v*sn,vy=S.u*sn+S.v*cs;
-    const rx=px-S.x,ry=py-S.y,vpx=vx-S.r*ry,vpy=vy+S.r*rx;
+    const rx=px-S.x,ry=py-S.y,a=rx*cs+ry*sn,b=-rx*sn+ry*cs;
     const otherSpeed=o.tr&&o.tr.st==='go'?o.tr.v:0;
-    const relativeX=vpx-Math.cos(o.psi||0)*otherSpeed,relativeY=vpy-Math.sin(o.psi||0)*otherSpeed;
-    const vn=relativeX*nx+relativeY*ny;
-    if(vn<0){
-      const side=(-rx*sn+ry*cs)>0?1:0,prot=fendOK(side)>=3,rn=rx*ny-ry*nx,j=-(prot?1.5:1.15)*vn/(1/MI+rn*rn/IZ);
-      vx+=j*nx/MI;vy+=j*ny/MI;S.r+=rn*j/IZ;
-      const tx=-ny,ty=nx,vt=relativeX*tx+relativeY*ty,rt=rx*ty-ry*tx,jt=clamp(-vt/(1/MI+rt*rt/IZ),-.25*j,.25*j);
-      vx+=jt*tx/MI;vy+=jt*ty/MI;S.r+=rt*jt/IZ;
-      S.u=vx*cs+vy*sn;S.v=-vx*sn+vy*cs;
-      const hit=-vn;
+    const side=b>0?1:0,prot=fendOK(side)>=3,relativeHeading=(o.psi||0)-S.psi;
+    const contact=resolveContact(physics,S,{a,b,nx:nx*cs+ny*sn,ny:-nx*sn+ny*cs,
+      otherU:Math.cos(relativeHeading)*otherSpeed,otherV:Math.sin(relativeHeading)*otherSpeed,restitution:prot?.05:.15});
+    if(contact.impact>0){
+      S.u=contact.u;S.v=contact.v;S.r=contact.r;
+      const hit=contact.impact;
       if(o.tr&&o.tr.st==='go'){o.tr.stopT=4;o.tr.v=0;S.u*=.25;S.v*=.25;S.r*=.25;} // both boats come to a stop
       const tied=lines.filter(l=>l.state==='fast').length>=2;
       if(prot){S.fSq[side]=Math.min(1,S.fSq[side]+hit*1.2+.03);S.fStress[side]+=Math.max(0,hit-(tied?.45:.12))*3;if(S.fStress[side]>2.2)popFender(side,px,py);}
       const soft=prot?(tied?.95:.55):.18;
-      if(hit>soft){S.listV=clamp((S.listV||0)+(side?1:-1)*(hit-soft)*.07,-.14,.14);S.damage=Math.min(100,S.damage+((hit-soft)*45+2)*(prot?.7:1.2));if((hit>1.1||S.damage>=70)&&!S.fire){S.fire={a:(rx*cs+ry*sn)*.8,b:(-rx*sn+ry*cs)*.8};toast('Fire on board',2200);}S.hits++;S.shake=Math.min(1,hit);S.kick=hit;if(S.t-(S.popT||-9)>1.5)toast('Hard contact · '+(hit*KN).toFixed(1)+' kn',1600);for(let i=0;i<10;i++)spawn(1,px,py,rnd(-2,2),rnd(-2,2),rnd(.7,1.2),rnd(1.2,2.4),.5);for(let i=0;i<12;i++)spray(px,py,rnd(-3.5,3.5),rnd(-3.5,3.5),rnd(3,8),rnd(.12,.26));spawn(2,px,py,0,0,1,1.6,5);spawn(2,px,py,0,0,.3,2.3,3.5);}
+      if(hit>soft){S.listV=clamp((S.listV||0)+(side?1:-1)*(hit-soft)*.07,-.14,.14);S.damage=Math.min(100,S.damage+((hit-soft)*45+2)*(prot?.7:1.2));if((hit>1.1||S.damage>=70)&&!S.fire){S.fire={a:a*.8,b:b*.8};toast('Fire on board',2200);}S.hits++;S.shake=Math.min(1,hit);S.kick=hit;if(S.t-(S.popT||-9)>1.5)toast('Hard contact · '+(hit*KN).toFixed(1)+' kn',1600);for(let i=0;i<10;i++)spawn(1,px,py,rnd(-2,2),rnd(-2,2),rnd(.7,1.2),rnd(1.2,2.4),.5);wakeDrop(px,py,Math.min(1.6,.4+hit*.3));S.sprayQ={t:0,k:Math.min(1.6,hit*.5),bias:side?-1:1,dur:.3,peak:.7};}
       else if(S.t-S.lastTouch>3&&hit>.03)toast(prot?'On the fenders':'Touching · no fenders that side',1100);
     }
     S.lastTouch=S.t;
@@ -286,71 +317,83 @@ function collide(){
 /* ---------- physics ---------- */
 function updateTraffic(dt){
   if(state!=='play'||dt<=0)return;
-  for(const o of obstacles)if(o.tr){const tr=o.tr;
-    if(tr.st==='wait'){const go=stops&&S.stage===tr.stage&&(tr.near?Math.hypot(S.x-tr.near[0]*GEO,S.y-tr.near[1]*GEO)<tr.near[2]*GEO:Math.hypot(S.x-tr.leave[0]*GEO,S.y-tr.leave[1]*GEO)>tr.leave[2]*GEO);
-      if(go){tr.st='go';o.x=tr.wp[0][0];o.y=tr.wp[0][1];o.psi=Math.atan2(tr.wp[1][1]-o.y,tr.wp[1][0]-o.x);tr.v=tr.spd*.7;}}
-    if(tr.st==='go'){
-      const tg=tr.wp[tr.i],last=tr.i===tr.wp.length-1;let dx=tg[0]-o.x,dy=tg[1]-o.y,d=Math.hypot(dx,dy);
-      if(!last&&d<14*GEO){tr.i++;}
-      if(last&&d<2){tr.st='done';tr.v=0;}
-      else{
-        let want=Math.atan2(dy,dx),spd=last?Math.min(tr.spd,d*.12+.4):tr.spd;
-        // Look out ahead, alter to starboard, and stop when the other vessel is too close.
-        const c0=Math.cos(o.psi),s0=Math.sin(o.psi),rx=S.x-o.x,ry=S.y-o.y,ahead=rx*c0+ry*s0,lat=-rx*s0+ry*c0,clear=LEN/2+o.l/2+8;
-        if(ahead>-clear&&ahead<clear+70&&Math.abs(lat)<(BEAM+o.b)*1.6+10){const k=clamp((ahead-clear)/70,0,1);spd*=k;want+=.55*(1-k);if(!tr.yield){tr.yield=true;toast(tr.say,3200);tr.said=true;}}
-        else tr.yield=false;
-        if(tr.stopT>0){tr.stopT=Math.max(0,tr.stopT-dt);spd=0;}
-        tr.v+=clamp(spd-tr.v,-1.1*dt,.5*dt);
-        const dpsi=Math.atan2(Math.sin(want-o.psi),Math.cos(want-o.psi));o.psi+=clamp(dpsi,-.22*dt,.22*dt)*Math.min(1,tr.v/1.2+.3);
-        o.x+=Math.cos(o.psi)*tr.v*dt;o.y+=Math.sin(o.psi)*tr.v*dt;o.p=poly(o.x,o.y,o.psi,o.l,o.b);o.cx=o.x;o.cy=o.y;
-        const sp=tr.v;
-        if(sp>.6&&Math.random()<dt*22)spawn(1,o.x-Math.cos(o.psi)*o.l*.5+rnd(-1,1),o.y-Math.sin(o.psi)*o.l*.5+rnd(-1,1),-Math.cos(o.psi)*1.5,-Math.sin(o.psi)*1.5,rnd(.6,1.1),rnd(2,4),.5);
-        if(sp>.6&&Math.random()<dt*10){const sd=Math.random()<.5?-1:1;spawn(1,o.x+Math.cos(o.psi)*o.l*.45-Math.sin(o.psi)*sd*o.b*.5,o.y+Math.sin(o.psi)*o.l*.45+Math.cos(o.psi)*sd*o.b*.5,-Math.sin(o.psi)*sd,Math.cos(o.psi)*sd,.5,rnd(1.5,3),.35);}
-        if(!tr.said&&Math.hypot(o.x-S.x,o.y-S.y)<120*GEO){tr.said=true;toast(tr.say,3200);}}}
+  const moving=obstacles.filter(o=>o.tr),snapshot=moving.map(trafficContact),player=playerContact(),plans=[];
+  for(const o of moving){const tr=o.tr;
+    if(tr.st==='wait'){
+      const go=stops&&S.stage===tr.stage&&(tr.near?Math.hypot(S.x-tr.near[0]*GEO,S.y-tr.near[1]*GEO)<tr.near[2]*GEO:Math.hypot(S.x-tr.leave[0]*GEO,S.y-tr.leave[1]*GEO)>tr.leave[2]*GEO);
+      if(go){tr.st='go';tr.v=0;tr.memory={};}
+    }
+    if(tr.st!=='go')continue;
+    let tg=tr.wp[tr.i],d=Math.hypot(tg[0]-o.x,tg[1]-o.y);
+    while(tr.i<tr.wp.length-1&&d<Math.max(8*GEO,o.l*.45)){tr.i++;tg=tr.wp[tr.i];d=Math.hypot(tg[0]-o.x,tg[1]-o.y);tr.memory.replan=0;}
+    const last=tr.i===tr.wp.length-1;
+    if(last&&d<3*GEO&&tr.v<.5){tr.st='done';tr.v=0;tr.memory={};continue;}
+    tr.stopT=Math.max(0,tr.stopT-dt);
+    const cruise=Math.min(tr.spd,inHarbour(o.x,o.y)?6/KN:Infinity,last?Math.sqrt(Math.max(0,d-2*GEO)*1.1):Infinity);
+    const vessel={...trafficContact(o),cruiseSpeed:tr.stopT>0?0:cruise};
+    const plan=planTrafficStep({vessel,goal:tg,contacts:[player,...snapshot.filter(q=>q.id!==tr.id)],obstacles:trafficPolygons,dt,memory:tr.memory});
+    plans.push([o,plan]);
   }
+  // All vessels plan against the same snapshot, so array order grants no priority.
+  for(const [o,plan] of plans){const tr=o.tr;o.x=plan.x;o.y=plan.y;o.psi=plan.heading;tr.v=plan.speed;tr.memory=plan.memory;tr.yield=plan.reason!=='following';o.p=poly(o.x,o.y,o.psi,o.l,o.b);o.cx=o.x;o.cy=o.y;
+    tr.noticeT=Math.max(0,(tr.noticeT||0)-dt);
+    const notice=navigationAdvice(player,[trafficContact(o)]);
+    if(notice.risk&&notice.kind!==tr.notice&&tr.noticeT===0){tr.notice=notice.kind;tr.noticeT=12;toast(notice.text,3200);}
+    else if(!notice.risk&&tr.noticeT===0)tr.notice='';
+    const sp=tr.v;
+    if(sp>.6&&Math.random()<dt*22)spawn(1,o.x-Math.cos(o.psi)*o.l*.5+rnd(-1,1),o.y-Math.sin(o.psi)*o.l*.5+rnd(-1,1),-Math.cos(o.psi)*1.5,-Math.sin(o.psi)*1.5,rnd(.6,1.1),rnd(2,4),.5);
+    if(sp>.6&&Math.random()<dt*10){const sd=Math.random()<.5?-1:1;spawn(1,o.x+Math.cos(o.psi)*o.l*.45-Math.sin(o.psi)*sd*o.b*.5,o.y+Math.sin(o.psi)*o.l*.45+Math.cos(o.psi)*sd*o.b*.5,-Math.sin(o.psi)*sd,Math.cos(o.psi)*sd,.5,rnd(1.5,3),.35);}
+  }
+}
+function anchorageStatus(){
+  const target=Math.ceil(18*Math.max(.7,SL)),stop=stops&&stops[S.stage],active=!!(stop&&stop.anchor);
+  const inZone=a=>active&&Math.hypot(a.x-slip.x,a.y-slip.y)<=slip.len/2;
+  const held=a=>a.held&&!a.weighing;
+  const anchor=S.anchors.find(a=>inZone(a)&&held(a)&&a.L0>=target&&!a.drag)
+    ||S.anchors.find(a=>inZone(a)&&held(a)&&a.L0>=target)
+    ||S.anchors.find(a=>inZone(a)&&held(a))||S.anchors.find(inZone)||preferredAnchor();
+  const current=anchor?anchor.L0:0,inside=!!(anchor&&inZone(anchor)),chainHeld=!!(anchor&&held(anchor));
+  const settled=!!(anchor&&!anchor.drag&&Math.hypot(S.u,S.v)<.2&&Math.abs(S.r)<.6*D2R);
+  const complete=active&&S.done,progress=complete?1:active?clamp((S.svc||0)/stop.dur,0,1):0;
+  const status=complete?'Anchorage complete':!anchor?'Drop an anchor in the marked circle':!inside?'Place the anchor in the marked circle'
+    :current<target?'Pay out '+target+' m of chain':!chainHeld?'Hold the chain':!settled?'Let the boat settle'
+    :'Holding · '+((S.svc||0).toFixed(1))+' / '+stop.dur+' s';
+  return {target,current,inside,held:chainHeld,settled,progress,complete,status};
 }
 function step(dt){
   if(S.passing&&advancePassage(dt))return;
   S.t+=dt;
+  advanceMissionEnvironment(dt);setWaves();advanceDeckWork(dt);
   updateTraffic(dt);
   for(let i=0;i<2;i++){S.fStress[i]=Math.max(0,S.fStress[i]-.12*dt);S.fSq[i]*=Math.max(0,1-4*dt);}
   for(let i=0;i<2;i++){
     const want=Math.abs(S.lever[i])<.02?0:sgn(S.lever[i]);
     if(S.gear[i]!==want){const d=.9*dt;if(Math.abs(S.rpm[i])>d)S.rpm[i]-=sgn(S.rpm[i])*d;else{S.rpm[i]=0;S.clutch[i]+=dt;if(S.clutch[i]>.45){S.gear[i]=want;S.clutch[i]=0;}}}
-    else S.rpm[i]+=clamp(S.lever[i]-S.rpm[i],-.5*dt,.5*dt);
+    else{S.clutch[i]=0;S.rpm[i]+=clamp(S.lever[i]-S.rpm[i],-.5*dt,.5*dt);}
   }
   S.thrAct+=clamp(S.thr-S.thrAct,-2.5*dt,2.5*dt);
   const cs=Math.cos(S.psi),sn=Math.sin(S.psi),u=S.u,v=S.v,r=S.r;
-  const th=n=>(n>0?T_AHD:-T_AST)*n*n;
-  const t0=th(S.rpm[0]),t1=th(S.rpm[1]);
-  const S2=SL*SL,S4=S2*S2;
-  let X=t0+t1-(3000*S2*u+5350*SL*SB*(SHIPS[shipId].cd||1)*u*Math.abs(u));
-  let Y=-(20000*v+72000*v*Math.abs(v))*S2;
-  let N=(t0-t1)*PROP_Y-(4e6*S4*r+1.6e8*S4*SL*r*Math.abs(r)+1.5e6*S4*Math.abs(u)*r);
-  // rudders: bite in prop wash and in the flow past the hull
-  const fr=S.rud*D2R*(.45*(Math.max(t0,0)+Math.max(t1,0))+6000*S2*u*Math.abs(u));
-  Y-=fr;N+=23*SL*fr;
-  // bow thruster fades with way on
-  const ft=S.thrAct*THR_F*clamp(1-Math.abs(u)/4,0,1);
-  Y+=ft;N+=THR_X*ft;
+  const S2=SL*SL;
+  let {X,Y,N}=vesselForces(physics,S);
   // wind on the topsides, centre of effort forward of midships
   const wd=windTo(),ws=windSpd(),vx=u*cs-v*sn,vy=u*sn+v*cs;
   const ax=wd[0]*ws-vx,ay=wd[1]*ws-vy,wu=ax*cs+ay*sn,wv=-ax*sn+ay*cs;
   const yw=242*S2*wv*Math.abs(wv);
   X+=41*SB*SB*wu*Math.abs(wu);Y+=yw;N+=3.5*SL*yw;
-  // swell: surge and sway with each crest, plus a slow set down-swell
-  const sd=swellTo(),k=TAU/env.lam,ph=k*(sd[0]*S.x+sd[1]*S.y)-TAU/env.T*T;
-  const fs=(60e3*env.sh*Math.sin(ph)+2500*env.sh*env.sh)*MR*shelter(S.x,S.y)*1.4,su=sd[0]*cs+sd[1]*sn,sv=-sd[0]*sn+sd[1]*cs;
-  X+=fs*su;Y+=fs*sv;N+=5e5*MR*SL*env.sh*Math.cos(ph)*2*su*sv;
+  // The dominant shared wave supplies the forcing phase. Acceleration is down
+  // its slope; short visual chop is filtered out of this planar hull model.
+  const sw=WV[0],sd=[sw.dx,sw.dz],ph=sw.k*(sd[0]*S.x+sd[1]*S.y)-sw.om*T,seaShelter=shelter(S.x,S.y);
+  const fs=(-60e3*env.sh*Math.cos(ph)+2500*env.sh*env.sh)*MR*seaShelter*1.4,su=sd[0]*cs+sd[1]*sn,sv=-sd[0]*sn+sd[1]*cs;
+  X+=fs*su;Y+=fs*sv;N+=5e5*MR*SL*env.sh*Math.sin(ph)*2*su*sv*seaShelter;
   if(KW.on){KW.pos+=KW.c*dt;const xb=kingX(S.x,S.y);
     if(xb<100&&xb>0&&!S.kingSaid){S.kingSaid=1;toast('Here it comes · bow into it!',2600);}
     // push along its travel, strongest on the face, at bow and stern separately so a beam-on boat gets slewed round
-    const kd=KW.d,push=(px,py)=>{const hh=kingH(px,py),sl=kingS(px,py);return MX*9.81*(Math.max(0,-sl)*.55+hh/40*.6);};
+    const kd=KW.d,push=(px,py)=>{const hh=kingH(px,py),sl=kingS(px,py);return physics.mx*9.81*(Math.max(0,-sl)*.55+hh/40*.6);};
     const bx=S.x+cs*LEN*.4,by=S.y+sn*LEN*.4,ax=S.x-cs*LEN*.4,ay=S.y-sn*LEN*.4,Pb=push(bx,by),Pa=push(ax,ay);
     const fu=kd[0]*cs+kd[1]*sn,fv=-kd[0]*sn+kd[1]*cs;X+=(Pb+Pa)*.5*fu;Y+=(Pb+Pa)*.5*fv;N+=(Pb-Pa)*fv*LEN*.4*.6;
     if(Math.abs(xb)<6&&!S.kingHit){S.kingHit=true;S.shake=.8;S.kick=1.4;S.sprayQ={t:0,k:1.6,bias:clamp(-fv,-1,1),dur:.6,peak:1.3};}
     if(xb<-320)KW.on=false;}
-  S.roll=env.sh*Math.cos(ph)*Math.abs(sv)*.07+wv*Math.abs(wv)*.00012;
+  S.roll=env.sh*Math.cos(ph)*sv*.07*seaShelter-wv*Math.abs(wv)*.00012;
 
   // mooring lines: thrown on a tap; the selected one is heaved in or slacked while a button is held
   // heaving on all lines evens the load: slack lines come in quickly, the hard ones are eased a touch
@@ -392,14 +435,21 @@ function step(dt){
       }
     }
   }
-  let wgh=null;
+  const weighed=[];
   for(const A of S.anchors){
     A.drag=false;
-    if(haul&&aSel===A.side){A.held=true;A.L0=clamp(A.L0+(haul>0?-.8:2.2)*dt,2,140);if(haul>0&&A.L0<=2.05)wgh=A;}
+    const manual=haul&&aSel===A.side;
+    if(manual){A.held=true;A.weighing=false;A.L0=clamp(A.L0+(haul>0?-.8:2.2)*dt,2,140);}
+    else if(A.weighing){A.held=true;A.L0=Math.max(2,A.L0-.8*dt);}
     const ha=hawseFor(A.side),fx=S.x+ha[0]*cs-ha[1]*sn,fy=S.y+ha[0]*sn+ha[1]*cs;let dx=A.x-fx,dy=A.y-fy,d=Math.hypot(dx,dy)||1;
-    const SCOPE=18*Math.max(.7,SL);
-    if(A.held&&!A.set&&A.L0>=SCOPE&&d>=Math.min(A.L0-1.2,SCOPE*.8)){A.set=true;toast('Anchor holding · '+Math.round(A.L0)+' m out',1800);}
-    if(A.held&&!A.set&&A.L0<SCOPE&&S.t-(A.warnT||-9)>8){A.warnT=S.t;toast('Pay out more chain · tap +, or back away',2200);}
+    const retrieving=manual?haul>0:A.weighing;
+    if(retrieving&&A.L0<=2.05&&d<=2.5){weighed.push(A);continue;}
+    if(retrieving&&A.L0<3&&d<3)A.set=false;
+    const SCOPE=Math.ceil(18*Math.max(.7,SL)),inAnchorage=!!(stops&&stops[S.stage].anchor&&Math.hypot(A.x-slip.x,A.y-slip.y)<=slip.len/2);
+    const readyToSet=!retrieving&&A.held&&A.L0>=SCOPE;
+    A.settle=inAnchorage&&readyToSet&&Math.hypot(u,v)<.2&&Math.abs(r)<.6*D2R?(A.settle||0)+dt:0;
+    if(!A.set&&readyToSet&&(inAnchorage?A.settle>=.75:d>=Math.min(A.L0-1.2,SCOPE*.8))){A.set=true;toast('Anchor holding · '+Math.floor(A.L0)+' m out',1800);}
+    if(!retrieving&&A.held&&!A.set&&A.L0<SCOPE&&S.t-(A.warnT||-9)>8){A.warnT=S.t;toast('Pay out more chain · tap +, or back away',2200);}
     {const al=(A.x-S.x)*cs+(A.y-S.y)*sn,la=-(A.x-S.x)*sn+(A.y-S.y)*cs;if(al<ha[0]-3&&al>-LEN/2&&Math.abs(la)<BEAM*.55){S.damage=Math.min(100,S.damage+dt*(.6+Math.hypot(u,v)*2));if(S.t-(A.scrT||-9)>4){A.scrT=S.t;toast('Chain scraping the hull · back away from it',2000);}}}
     if(!A.held){A.run=(A.run||0)+dt;if(A.run>.9&&A.run<4.4)A.L0+=4*(1-(A.run-.9)/3.5)*Math.max(.5,SL)*dt;A.L0=Math.max(A.L0,d+1);} /* free chain rumbles out to the sea bed */
     else{let ext=d-A.L0;if(ext>0){
@@ -407,14 +457,15 @@ function step(dt){
       const open=-((vx-r*(fy-S.y))*dx+(vy+r*(fx-S.x))*dy)/d,tn=Math.max(0,30e3*ext+25e3*open)*LK;
       const Fx=tn*dx/d,Fy=tn*dy/d,bx=Fx*cs+Fy*sn,by=-Fx*sn+Fy*cs;X+=bx;Y+=by;N+=ha[0]*by-ha[1]*bx;}}
   }
-  if(wgh){releaseMooringInputs();S.anchors=S.anchors.filter(a=>a!==wgh);S.weigh[wgh.side]=1;aSel=null;toast('Anchor up and stowed',1400);}
-  S.u+=(X+MY*v*r)/MX*dt;S.v+=(Y-MX*u*r)/MY*dt;S.r+=N/IZ*dt;
+  if(weighed.length){if(weighed.some(a=>a.side===aSel)){releaseMooringInputs();aSel=null;}S.anchors=S.anchors.filter(a=>!weighed.includes(a));for(const a of weighed)S.weigh[a.side]=1;toast(weighed.length>1?'Anchors up and stowed':'Anchor up and stowed',1400);}
+  const acceleration=bodyAcceleration(physics,S,{X,Y,N});
+  S.u+=acceleration.u*dt;S.v+=acceleration.v*dt;S.r+=acceleration.r*dt;
   S.x+=(S.u*cs-S.v*sn)*dt;S.y+=(S.u*sn+S.v*cs)*dt;S.psi+=S.r*dt;
   collide();
+  updateNavigation(dt);
 
   // wash, wake and spray (deliberately larger than life)
   const PS=Math.max(.5,Math.sqrt(SL)),emit=(k,a,b,du,dv,size,life,g,w)=>spawn(k,S.x+a*SL*cs-b*SB*sn,S.y+a*SL*sn+b*SB*cs,vx*.3+du*cs-dv*sn+rnd(-.3,.3),vy*.3+du*sn+dv*cs+rnd(-.3,.3),size*PS,life,g,w);
-  const spr=()=>{}; // spray kept for hard contacts only
   const cnt=q=>{const n=Math.floor(q);return n+(Math.random()<q-n?1:0);};
   for(let i=0;i<2;i++){
     const n=S.rpm[i],a=Math.abs(n);if(a<.02)continue;
@@ -423,21 +474,18 @@ function step(dt){
     for(let j=cnt(a*26*dt+dt);j--;)emit(0,px,py+rnd(-1.4,1.4),dir*(1.5+5*a)*rnd(.6,1.1),rnd(-1,1)+(n>0?S.rud/35*(1+3.5*a):0),1.5+a*1.5,rnd(6,10),.7);
     if(Math.random()<a*16*dt)emit(4,px,py+rnd(-1.5,1.5),dir*(1.2+4*a)*rnd(.6,1.1),rnd(-.6,.6),1.3+a*1.3,rnd(4,7.5),.6,(i?1:-1)*dir*rnd(.7,1.7));
     if(Math.random()<a*24*dt)emit(5,px,py+rnd(-1.6,1.6),dir*(1.5+5*a)*rnd(.5,1.1),rnd(-.8,.8),1.2+a*1.2,rnd(3,6),.6);
-    if(a>.12)for(let j=cnt((a-.08)*130*dt);j--;)spr(px+rnd(-1,1),py+rnd(-1.5,1.5),dir*rnd(1,5)*a*2,rnd(-2.5,2.5)*a*2,rnd(2,5)+a*5,rnd(.1,.22));
   }
   if(Math.abs(S.thrAct)>.1){
     const d=-sgn(S.thrAct),a=Math.abs(S.thrAct);
     for(let j=cnt(a*110*dt);j--;)emit(1,20+rnd(-.8,.8),d*4.3,rnd(-1.5,1.5),d*rnd(5,11),rnd(.5,.9),rnd(1.2,2.8),.5);
     for(let j=cnt(a*14*dt);j--;)emit(0,20,d*4.6,rnd(-.5,.5),d*rnd(2.5,5.5),1.5,rnd(6,10),.7);
     if(Math.random()<a*9*dt)emit(4,20,d*5,rnd(-.4,.4),d*rnd(2,4),1.2,rnd(3,6),.5,(Math.random()<.5?-1:1)*rnd(.8,1.7));
-    for(let j=cnt(a*60*dt);j--;)spr(20+rnd(-.8,.8),d*4.5,rnd(-1,1),d*rnd(2,6),rnd(2,5),rnd(.1,.2));
   }
   const sp=Math.hypot(u,v);
   if(sp>.3){
     for(let sd2=-1;sd2<=1;sd2+=2){
       for(let j=cnt(sp*12*dt);j--;)emit(1,23.5+rnd(-2.5,.5),sd2*1.2,-u*.15,sd2*(1.2+sp*.85)*rnd(.6,1.2),.4+sp*.1,rnd(1.6,3),.35);
       for(let j=cnt(sp*2*dt);j--;)emit(1,rnd(-24,16),sd2*4.75,-u*.1,sd2*rnd(.05,.25),.32,rnd(.6,1.2),.12);
-      if(sp>.9)for(let j=cnt((sp-.7)*30*dt);j--;)spr(24+rnd(-2,0),sd2*rnd(.5,1.5),rnd(0,1.5),sd2*rnd(1,3)*sp*.5,rnd(1.5,3)+sp*.8,rnd(.1,.2));
     }
     for(let j=cnt(Math.abs(u)*20*dt);j--;)emit(0,u>0?-25.5:24,rnd(-3.8,3.8),-u*.25,0,2.4,rnd(8,14),.6);
   }
@@ -448,21 +496,18 @@ function step(dt){
     if(u>1.1)for(let j=cnt(k*45*dt);j--;)emit(1,-25.5+rnd(-1,0),rnd(-4.2,4.2),-u*.28,rnd(-.6,.6),rnd(1,1.6),rnd(4,8),.6);}
   if(Math.abs(v)>.2){const sd2=sgn(v);
     for(let j=cnt(Math.abs(v)*6*dt);j--;)emit(1,rnd(-24,21),sd2*4.75,0,sd2*rnd(.1,.4),.38,rnd(.6,1.2),.18);
-    if(Math.abs(v)>.5)for(let j=cnt(Math.abs(v)*25*dt);j--;)spr(rnd(-24,21),sd2*4.8,0,sd2*rnd(.5,2),rnd(1.5,3.5),.14);}
-  // swell crests and wind chop slapping the weather side
+  }
+  // Foam from swell crests slapping the weather side.
   const slap=env.sh*Math.pow(Math.max(0,Math.sin(ph)),3)*Math.abs(sv);
-  for(let j=cnt(slap*70*dt);j--;){const b=-sgn(sv)*4.8,a=rnd(-24,22);spr(a,b,0,-sgn(sv)*rnd(0,1.5),rnd(2,4.5)*(.6+env.sh),.15);if(Math.random()<.12)emit(1,a,b,0,-sgn(sv)*.25,.32,rnd(.5,1),.12);if(Math.random()<.1)emit(0,a,b*.99,0,-sgn(sv)*rnd(.05,.15),.8,rnd(1.2,2),.15);}
-  const chop=Math.max(0,ws*KN-9)*Math.abs(wv)/(ws+.01);
-  for(let j=cnt(chop*2.2*dt);j--;)spr(rnd(-24,22),-sgn(wv)*4.8,0,sgn(wv)*rnd(.5,2.5),rnd(1.5,4),.13);
+  for(let j=cnt(slap*70*dt);j--;){const b=-sgn(sv)*4.8,a=rnd(-24,22);if(Math.random()<.12)emit(1,a,b,0,-sgn(sv)*.25,.32,rnd(.5,1),.12);if(Math.random()<.1)emit(0,a,b*.99,0,-sgn(sv)*rnd(.05,.15),.8,rnd(1.2,2),.15);}
 
   // berth check
   const ch=Math.cos(slip.h),sh=Math.sin(slip.h);let ok=true;
   for(const p of poly(S.x,S.y,S.psi,LEN,BEAM)){const dx=p[0]-slip.x,dy=p[1]-slip.y;if(Math.abs(dx*ch+dy*sh)>slip.len/2||Math.abs(-dx*sh+dy*ch)>slip.wid/2){ok=false;break;}}
   let he=Math.abs(Math.atan2(Math.sin(S.psi-slip.h),Math.cos(S.psi-slip.h)));if(slip.either)he=Math.min(he,Math.PI-he);
   const lined=ok&&he<7*D2R,still=Math.hypot(S.u,S.v)<.2&&Math.abs(S.r)<.6*D2R;
-  const anchorHolding=a=>a.held&&a.set&&!a.drag;
-  const nFast=lines.filter(l=>l.state==='fast').length+S.anchors.filter(anchorHolding).length;
-  const anchStop=stops&&stops[S.stage].anchor,anchOK=!!(anchStop&&still&&S.anchors.some(a=>anchorHolding(a)&&Math.hypot(a.x-slip.x,a.y-slip.y)<slip.len/2));
+  const nFast=lines.filter(l=>l.state==='fast').length;
+  const anchStop=stops&&stops[S.stage].anchor,anch=anchStop?anchorageStatus():null,anchOK=!!(anch&&anch.inside&&anch.held&&anch.current>=anch.target&&anch.settled);
   S.inPos=anchStop?anchOK:lined;
   if(anchStop&&anchOK&&S.svc==null&&!S.done){S.svc=0;toast('Anchor down in the anchorage',2400);}
   if(!anchStop&&lined&&still&&nFast>=2&&!S.done){S.hold+=dt;if(S.hold>=3){if(!stops){S.done=true;finish(true);}else if(S.svc==null){S.svc=0;toast(stops[S.stage].doing+' · hold her there',2600);}}}
@@ -478,7 +523,7 @@ function step(dt){
     }else{S.svc=null;toast(anchStop?'Anchor dragging · reset it in the box':'Interrupted · make her fast again',2000);}
   }
   if(S.mode==='depart'&&!S.passing){
-    const ex=target(),free=!lines.some(l=>l.state!=='stowed')&&!S.anchors.length;
+    const ex=[LV.start[0]*GEO,LV.start[1]*GEO],free=!lines.some(l=>l.state!=='stowed')&&!S.anchors.length;
     if(Math.hypot(ex[0]-S.x,ex[1]-S.y)<70||Math.hypot(slip.x-S.x,slip.y-S.y)>300){
       if(free){if(S.voyage)passage();else{S.mode='free';finish('dep');}}
       else if(S.t-toastT>5){toast('Still attached · let go the lines'+(S.anchors.length?' and weigh anchor':''),2000);toastT=S.t;}
@@ -490,7 +535,7 @@ function step(dt){
 /* ---------- results ---------- */
 const fmt=t=>Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0');
 // where the arrow points: the berth, or the way out when leaving
-const target=()=>S.mode==='depart'?[LV.start[0]*GEO,LV.start[1]*GEO]:[slip.x,slip.y];
+const target=()=>navCache.path[navCache.index]||navCache.waitAt||navCache.finalTarget||[slip.x,slip.y];
 const nextName=()=>LEVELS[(lvI+1)%3].name;
 let banner='';
 function finish(won){
@@ -567,24 +612,31 @@ const hemiL=new T3.HemisphereLight(col(0xb7c4ca),col(0x161d22),.62*LIGHT_SCALE);
 const sunL=new T3.DirectionalLight(col(0xfff0da),.85*LIGHT_SCALE);sunL.position.copy(SUN).multiplyScalar(100);scene3.add(sunL);
 
 /* waves: one definition drives the sea surface, the lighting and how the boats ride */
-const WV=[];for(let i=0;i<6;i++)WV.push({dx:1,dz:0,k:1,amp:0,om:1});
+const waterCoarse=matchMedia('(pointer: coarse)').matches||innerWidth<600;
+let waterTier=waterQuality(waterCoarse,false);
+const WV=buildWaves(env);
 const uW=WV.map(()=>new T3.Vector4()),uOm=[0,0,0,0,0,0];
-let waveWFrom,waveSFrom,waveKn,waveLength,waveHeight,wavePeriod;
+let waveWFrom,waveSFrom,waveKn,waveLength,waveHeight;
 function setWaves(){
-  if(waveWFrom===env.wFrom&&waveSFrom===env.sFrom&&waveKn===env.wk&&waveLength===env.lam&&waveHeight===env.sh&&wavePeriod===env.T)return;
-  waveWFrom=env.wFrom;waveSFrom=env.sFrom;waveKn=env.wk;waveLength=env.lam;waveHeight=env.sh;wavePeriod=env.T;
-  const wa=(env.wFrom+180)*D2R,sa=(env.sFrom+180)*D2R,wf=clamp(env.wk/22,.1,1.4);
-  [[sa,env.lam,env.sh*.5,TAU/env.T],[sa+.4,31,env.sh*.15,0],[wa+.15,16,.16*wf,0],[wa-.4,10,.11*wf,0],[wa+.55,6.5,.07*wf,0],[wa-.15,4.2,.045*wf,0]]
-  .forEach((d,i)=>{const w=WV[i];w.dx=Math.sin(d[0]);w.dz=-Math.cos(d[0]);w.k=TAU/d[1];w.amp=d[2];w.om=d[3]||Math.sqrt(9.81*w.k);uW[i].set(w.dx,w.dz,w.k,w.amp);uOm[i]=w.om;});
-  U.uWind.value.set(Math.sin(wa),-Math.cos(wa));U.uDet.value=.5+wf*1.1;
+  if(waveWFrom===env.wFrom&&waveSFrom===env.sFrom&&waveKn===env.wk&&waveLength===env.lam&&waveHeight===env.sh)return;
+  waveWFrom=env.wFrom;waveSFrom=env.sFrom;waveKn=env.wk;waveLength=env.lam;waveHeight=env.sh;
+  buildWaves(env,WV);
+  WV.forEach((w,i)=>{uW[i].set(w.dx,w.dz,w.k,w.amp);uOm[i]=w.om;});
+  const wa=(env.wFrom+180)*D2R,wf=clamp(env.wk/22,0,1.4);
+  U.uChop.value=WV.chop;U.uWind.value.set(Math.sin(wa),-Math.cos(wa));U.uDet.value=.5+wf*1.1;
 }
 // king wave: one long-crested ridge with a steep front face, travelling along KW.d
 const KW={on:false,d:[1,0],pos:0,A:0,c:11};
 const kingX=(x,z)=>x*KW.d[0]+z*KW.d[1]-KW.pos;
 const kingH=(x,z)=>{if(!KW.on)return 0;const X=kingX(x,z),W=X>0?11:24;return KW.A*Math.exp(-X*X/(W*W));};
 const kingS=(x,z)=>{if(!KW.on)return 0;const X=kingX(x,z),W=X>0?11:24;return KW.A*Math.exp(-X*X/(W*W))*(-2*X/(W*W));}; // slope along the travel direction
-const waveH=(x,z)=>{let h=0;for(const w of WV)h+=w.amp*Math.sin(w.k*(w.dx*x+w.dz*z)-w.om*T);return h*shelter(x,z)+kingH(x,z);};
-const U={uT:{value:0},uSun:{value:SUN},uFog:{value:FOG},uW:{value:uW},uOm:{value:uOm},uWind:{value:new T3.Vector2(1,0)},uDet:{value:1},uCtr:{value:new T3.Vector2()},uFogK:{value:.0007},uLow:{value:0},uSlop:{value:0},uNight:{value:0},uUW:{value:0},uKing:{value:new T3.Vector4(1,0,-9999,0)},uWake:{value:[]},uSlip:{value:new T3.Vector3(0,0,1)},uShip:{value:new T3.Vector4(0,0,1,0)},uHull:{value:new T3.Vector4(25,4.7,0,0)},uProp:{value:new T3.Vector2()},tFoam:{value:null},uFoamC:{value:new T3.Vector3(0,0,240)}};
+const waterSettings={shelterX:0,shelterZ:0,scale:1,king:KW},waterProbe={};
+function waveSampleAt(x,z){
+  waterSettings.shelterX=shC.x;waterSettings.shelterZ=shC.y;waterSettings.scale=GEO;
+  return sampleWater(WV,waterSettings,x,z,T,waterProbe);
+}
+const waveH=(x,z)=>waveSampleAt(x,z).height;
+const U={uT:{value:0},uSun:{value:SUN},uFog:{value:FOG},uW:{value:uW},uOm:{value:uOm},uChop:{value:WV.chop},uWind:{value:new T3.Vector2(1,0)},uDet:{value:1},uCtr:{value:new T3.Vector2()},uFogK:{value:.0007},uLow:{value:waterCoarse?1:0},uRippleCount:{value:waterTier.rippleOctaves},uWakeStride:{value:waterTier.wakeStride},uFoamDetail:{value:waterTier.foamDetail},uSlop:{value:0},uNight:{value:0},uUW:{value:0},uKing:{value:new T3.Vector4(1,0,-9999,0)},uWake:{value:[]},uSlip:{value:new T3.Vector3(0,0,1)},uShip:{value:new T3.Vector4(0,0,1,0)},uHull:{value:new T3.Vector4(25,4.7,0,0)},uProp:{value:new T3.Vector2()},tFoam:{value:null},uFoamC:{value:new T3.Vector3(0,0,240)}};
 // shelter: full sea outside, about a fifth of it by the berth
 const shC={x:0,y:0};
 const shelter=(x,z)=>{const t=clamp((Math.hypot(x-shC.x,z-shC.y)-45*GEO)/(165*GEO),0,1);return .22+.78*t*t*(3-2*t);};
@@ -642,25 +694,27 @@ const skyM=new T3.Mesh(new T3.SphereGeometry(5000,32,16),new T3.ShaderMaterial({
   #include <colorspace_fragment>
   }`}));
 skyM.frustumCulled=false;scene3.add(skyM);
-const sea=new T3.Mesh(new T3.PlaneGeometry(2,2,384,384),new T3.ShaderMaterial({uniforms:U,fog:false,side:T3.DoubleSide,
-  vertexShader:`uniform vec4 uW[6];uniform float uOm[6];uniform float uT;uniform vec2 uCtr;uniform vec4 uKing;`+HULL_GLSL+`uniform vec3 uSlip;varying vec3 vP;varying vec2 vQ;
+function seaGeometry(segments){
+  const geometry=new T3.PlaneGeometry(2,2,segments,segments);
+  // This shader supplies its own coordinates and analytic normals.
+  geometry.deleteAttribute('normal');geometry.deleteAttribute('uv');return geometry;
+}
+const sea=new T3.Mesh(seaGeometry(waterTier.segments),new T3.ShaderMaterial({uniforms:U,fog:false,side:T3.DoubleSide,
+  vertexShader:`uniform float uT;uniform vec2 uCtr;`+WATER_GLSL+HULL_GLSL+`varying vec3 vP;varying vec2 vQ;
   void main(){
     vec2 u=position.xy,q=sign(u)*pow(abs(u),vec2(3.))*3000.,p=uCtr+q;
-    vec3 o=vec3(p.x,0.,p.y);float nearF=exp(-length(q)/200.),sh=.22+.78*smoothstep(45.*uSlip.z,210.*uSlip.z,length(p-uSlip.xy));
-    for(int i=0;i<6;i++){float a=uW[i].w*sh*(i>2?nearF:1.),ph=uW[i].z*dot(uW[i].xy,p)-uOm[i]*uT;o.y+=a*sin(ph);o.xz+=uW[i].xy*a*.7*cos(ph);}
-    if(uKing.w>0.){float X=dot(p,uKing.xy)-uKing.z,W=X>0.?11.:24.;float kh=uKing.w*exp(-X*X/(W*W));o.y+=kh;o.xz+=uKing.xy*kh*.35;}
-    o.y+=hullH(p);
+    vec3 o,tx,tz;waterSurface(p,o,tx,tz);o.y+=hullH(o.xz);
     vP=o;vQ=p;gl_Position=projectionMatrix*viewMatrix*vec4(o,1.);
   }`,
-  fragmentShader:SKY_GLSL+HULL_GLSL+`uniform vec4 uW[6];uniform float uOm[6];uniform vec2 uWind;uniform float uDet,uFogK,uLow,uSlop,uUW;uniform vec4 uKing;uniform vec4 uWake[32];uniform vec3 uSlip;uniform sampler2D tFoam;uniform vec3 uFoamC;varying vec3 vP;varying vec2 vQ;
+  fragmentShader:SKY_GLSL+WATER_GLSL+HULL_GLSL+`uniform vec2 uWind;uniform float uDet,uFogK,uLow,uSlop,uUW,uRippleCount,uWakeStride,uFoamDetail;uniform vec4 uWake[32];uniform sampler2D tFoam;uniform vec3 uFoamC;varying vec3 vP;varying vec2 vQ;
   vec2 rot(vec2 v,float a){float c=cos(a),s=sin(a);return vec2(c*v.x-s*v.y,s*v.x+c*v.y);}
   void main(){
-    vec2 p=vQ;float dist=length(cameraPosition-vP);
-    vec2 g=vec2(0.);float hh=0.;
-    for(int i=0;i<6;i++){float ph=uW[i].z*dot(uW[i].xy,p)-uOm[i]*uT;g+=uW[i].xy*uW[i].w*uW[i].z*cos(ph);hh+=uW[i].w*sin(ph);}
-    float kingFoam=0.;if(uKing.w>0.){float X=dot(p,uKing.xy)-uKing.z,W=X>0.?11.:24.,e=exp(-X*X/(W*W));g+=uKing.xy*uKing.w*e*(-2.*X/(W*W));hh+=uKing.w*e*.3;
+    vec2 p=vP.xz;float dist=length(cameraPosition-vP);
+    vec3 surface,tx,tz;waterSurface(vQ,surface,tx,tz);vec3 baseNormal=cross(tz,tx);
+    vec2 g=-baseNormal.xz/max(baseNormal.y,.0001);float hh=surface.y;
+    float kingFoam=0.;if(uKing.w>0.){float X=dot(vQ,uKing.xy)-uKing.z,W=X>0.?11.:24.,e=exp(-X*X/(W*W));
       kingFoam=smoothstep(.55,.95,e)*smoothstep(-2.,6.,X)*(.4+.6*noise(p*.35+uT*.5))*smoothstep(1.5,3.,uKing.w);}
-    float sh=.22+.78*smoothstep(45.*uSlip.z,210.*uSlip.z,length(p-uSlip.xy));g*=sh;hh*=sh;
+    float sh=waterShelter(vQ).x;
     float h0=hullH(p);g+=vec2(hullH(p+vec2(.5,0.))-h0,hullH(p+vec2(0.,.5))-h0)*2.;hh+=h0;
     vec2 sd=p-uShip.xy;float slx=dot(sd,uShip.zw),sly=dot(sd,vec2(-uShip.w,uShip.z));
     float boil=abs(uProp.x)*exp(-SQ((slx-(uProp.x>0.?-uHull.x-5.:-uHull.x+7.))/7.)-SQ(sly/(uHull.y*1.1)));
@@ -676,14 +730,14 @@ const sea=new T3.Mesh(new T3.PlaneGeometry(2,2,384,384),new T3.ShaderMaterial({u
     g+=sideN*(uW[0].w*.55+uSlop*.3)*nearH*incid*.45*sin(3.6*max(hd0,0.)-uT*3.4+swPh);
     // short wind ripples: lighting only, faded with distance
     vec3 V=normalize(cameraPosition-vP);
-    float foot=dist*.0016/max(abs(V.y),.08),lam=foot<1.7?3.2:0.,amp=uDet*.05;
-    float stir=exp(-max(length(p-uShip.xy)-uHull.x,0.)/22.);vec2 pos=p+(4.+7.*stir)*vec2(noise(p*.06+uT*.04),noise(p*.06+5.3-uT*.04))+stir*3.*vec2(noise(p*.31-uT*.2),noise(p*.29+4.2+uT*.18));float am=.45+1.1*noise(p*.11-uT*.05);
-    for(int i=0;i<9;i++){if(lam<=0.)break;float fi=float(i);vec2 d=rot(uWind,sin(fi*2.4+.6)*(.5+.06*fi));
+    float foot=max(.001,max(length(dFdx(p)),length(dFdy(p)))),lam=foot<1.7?3.2:0.,amp=uDet*.05;
+    if(lam>2.*foot){float stir=exp(-max(length(p-uShip.xy)-uHull.x,0.)/22.);vec2 pos=p+(4.+7.*stir)*vec2(noise(p*.06+uT*.04),noise(p*.06+5.3-uT*.04))+stir*3.*vec2(noise(p*.31-uT*.2),noise(p*.29+4.2+uT*.18));float am=.45+1.1*noise(p*.11-uT*.05);
+    for(int i=0;i<9;i++){if(lam<=2.*foot||float(i)>=uRippleCount)break;float fi=float(i);vec2 d=rot(uWind,sin(fi*2.4+.6)*(.5+.06*fi));
       float k=6.2832/lam,x=k*dot(d,pos)-k*1.25*sqrt(lam)*uT+fi*1.7,w=exp(sin(x)-1.),dx=w*cos(x);
-      g+=amp*am*(.45+.55*sh)*k*dx*d*smoothstep(2.,6.,lam/foot);pos-=d*dx*lam*.08;lam*=.7;amp*=.74;}
+      g+=amp*am*(.45+.55*sh)*k*dx*d*smoothstep(2.,6.,lam/foot);pos-=d*dx*lam*.08;lam*=.7;amp*=.74;}}
     // rings spreading from where the hull has been: they overlap into a wake
     float wf=smoothstep(2.,6.,2.6/foot);
-    if(wf>0.&&length(p-uShip.xy)<460.)for(int i=0;i<32;i++){vec4 w=uWake[i];if(w.w<=0.)continue;
+    if(wf>0.&&length(p-uShip.xy)<460.)for(int i=0;i<32;i++){if(uWakeStride>1.&&mod(float(i),uWakeStride)>.5)continue;vec4 w=uWake[i];if(w.w<=0.)continue;
       float age=uT-w.z;if(age>48.)continue;vec2 dv=p-w.xy;float r=length(dv)+.001,x=r-1.15*age;if(abs(x)>5.)continue;
       float a=w.w*.09*exp(-age*.075)/(1.+r*.06)*exp(-x*x*.2)*wf;
       g+=dv/r*a*(-.4*x*cos(2.42*x)-2.42*sin(2.42*x));}
@@ -707,15 +761,21 @@ const sea=new T3.Mesh(new T3.PlaneGeometry(2,2,384,384),new T3.ShaderMaterial({u
       // fade out irregularly towards the edge of the foam window so the wash never ends in a straight line
       {vec2 ed=min(fu,1.-fu);float en=.06+.08*noise(p*.07+uT*.02);fm*=smoothstep(0.,en,ed.x)*smoothstep(0.,en,ed.y);}
       if(fm.r+fm.g>.004){
-        vec2 cq=p*(.7+.4*noise(p*.07))+1.8*vec2(noise(p*.23+uT*.03),noise(p*.23+9.1-uT*.03))+vec2(uT*.05,-uT*.04),ci=floor(cq),cf=fract(cq);float f1=9.,f2=9.;
-        for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 o=vec2(float(i),float(j)),hv=vec2(hash(ci+o),hash(ci+o+7.31));hv=.5+.4*sin(uT*.6+6.2832*hv);float dd=length(o+hv-cf);if(dd<f1){f2=f1;f1=dd;}else if(dd<f2)f2=dd;}
-        float rim=1.-smoothstep(.02,.24,f2-f1),dens=fm.r*2.4,fine=noise(p*5.+uT*.4);
+        float rim=.35;
+        if(uFoamDetail>.5){vec2 cq=p*(.7+.4*noise(p*.07))+1.8*vec2(noise(p*.23+uT*.03),noise(p*.23+9.1-uT*.03))+vec2(uT*.05,-uT*.04),ci=floor(cq),cf=fract(cq);float f1=9.,f2=9.;
+          for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 o=vec2(float(i),float(j)),hv=vec2(hash(ci+o),hash(ci+o+7.31));hv=.5+.4*sin(uT*.6+6.2832*hv);float dd=length(o+hv-cf);if(dd<f1){f2=f1;f1=dd;}else if(dd<f2)f2=dd;}
+          rim=1.-smoothstep(.02,.24,f2-f1);}
+        float dens=fm.r*2.4,fine=noise(p*5.+uT*.4);
         float foam=clamp(smoothstep(.8,1.3,dens)+rim*smoothstep(.1,.7,dens)+(fine-.55)*dens*.8,0.,1.);
         float churn=smoothstep(.05,.5,fm.g*2.2)*(.55+.45*noise(p*2.1-uT*.3));
         c+=vec3(.012,.085,.09)*smoothstep(0.,.6,dens)*(1.-foam);
         c=mix(c,vec3(.01,.05,.11),churn*.7*(1.-foam*.6));
         c=mix(c,vec3(.7,.78,.8)*(1.-.68*uNight)*(.7+.3*max(dot(n,uSun),0.)),foam*.9);
       }}
+    // Crests collect a little wind-driven froth where the analytic surface
+    // compresses. Keep it sparse and fade subpixel detail before the horizon.
+    float crest=smoothstep(.13,.34,1.-baseNormal.y)*smoothstep(.7,1.6,uDet)*smoothstep(.1,.5,hh)*(1.-smoothstep(.3,1.,foot));
+    if(crest>.002){float flecks=smoothstep(.48,.78,noise(p*1.25+vec2(uT*.2,-uT*.1)));c=mix(c,vec3(.7,.78,.8)*(1.-.68*uNight),crest*flecks*.65);}
     if(kingFoam>0.)c=mix(c,vec3(.8,.86,.88)*(1.-.6*uNight),kingFoam*.7); // the crest breaking along its face
     c=mix(c,uFog,1.-exp(-dist*dist*uFogK*uFogK));
     gl_FragColor=vec4(c,1.);
@@ -723,6 +783,12 @@ const sea=new T3.Mesh(new T3.PlaneGeometry(2,2,384,384),new T3.ShaderMaterial({u
     #include <colorspace_fragment>
   }`}));
 sea.frustumCulled=false;scene3.add(sea);
+function applyWaterQuality(low){
+  const next=waterQuality(waterCoarse,low);
+  if(next.segments!==waterTier.segments){const old=sea.geometry;sea.geometry=seaGeometry(next.segments);old.dispose();}
+  waterTier=next;U.uLow.value=waterCoarse||low?1:0;
+  U.uRippleCount.value=next.rippleOctaves;U.uWakeStride.value=next.wakeStride;U.uFoamDetail.value=next.foamDetail;
+}
 
 /* geometry helpers: shapes are drawn in plan (x forward/east, y starboard/south) and extruded upward */
 const matC={},sharedMaterials=new Set();
@@ -860,7 +926,7 @@ function puff(x,y,z,fire){
   let q=puffs.find(o=>o.life<=0);
   if(!q){if(puffs.length>=190)return null;q={life:0,sp:new T3.Sprite(new T3.SpriteMaterial({map:foamTex,transparent:true,depthWrite:false}))};scene3.add(q.sp);puffs.push(q);}
   q.life=q.max=fire?rnd(.45,.9):rnd(3,5.5);q.fire=fire;q.x=x+rnd(-1,1);q.y=y;q.z=z+rnd(-1,1);q.vy=fire?rnd(2,4.5):rnd(1.6,3.2);q.s=fire?rnd(1.6,2.8):rnd(1.6,2.6);
-  q.spray=false;q.mist=false;q.streak=false;q.jet=false;q.exh=false;q.dk=false;q.faint=false;q.dr=0;q.g=9.8;q.sp.material.map=foamTex;q.sp.material.rotation=0;q.sp.material.blending=fire?T3.AdditiveBlending:T3.NormalBlending;q.sp.material.color.setHex(fire?0xff6a14:0x17191b);q.sp.visible=true;q.ex=false;return q;
+  q.spray=false;q.mist=false;q.streak=false;q.jet=false;q.hitWater=false;q.exh=false;q.dk=false;q.faint=false;q.dr=0;q.g=9.8;q.sp.material.map=foamTex;q.sp.material.rotation=0;q.sp.material.blending=fire?T3.AdditiveBlending:T3.NormalBlending;q.sp.material.color.setHex(fire?0xff6a14:0x17191b);q.sp.visible=true;q.ex=false;return q;
 }
 const cnt2=q=>{const n=Math.floor(q);return n+(Math.random()<q-n?1:0);};
 function updateSmoke(dt){
@@ -909,10 +975,12 @@ function updateSmoke(dt){
     if(Math.random()<dt*14)puff(v3a.x,v3a.y+1,v3a.z,false);if(Math.random()<dt*26)puff(v3a.x,v3a.y,v3a.z,true);
     for(const q of puffs)if(q.life===q.max)q.s*=k;
   }
-  const wd=windTo(),ws=windSpd()*.6;
-  const wdA=windTo(),wsA=windSpd(),wvx=wdA[0]*wsA,wvz=wdA[1]*wsA;
+  const wd=windTo(),wsA=windSpd(),ws=wsA*.6,wvx=wd[0]*wsA,wvz=wd[1]*wsA;
+  let waterCeiling=KW.on?KW.A:0;for(const wave of WV)waterCeiling+=wave.amp;
   for(const q of puffs){if(q.life<=0)continue;q.life-=dt;if(q.life<=0){q.sp.visible=false;continue;}
-    if(q.spray){const dr=q.dr||0;q.vy-=(q.g||9.8)*dt;q.vx+=(wvx-q.vx)*dr*dt;q.vz+=(wvz-q.vz)*dr*dt;q.vy*=1-dr*.25*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.z+=q.vz*dt;if(q.y<0)q.life=Math.min(q.life,.15);
+    if(q.spray){const dr=q.dr||0;q.vy-=(q.g||9.8)*dt;q.vx+=(wvx-q.vx)*dr*dt;q.vz+=(wvz-q.vz)*dr*dt;q.vy*=1-dr*.25*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.z+=q.vz*dt;
+      if(!q.hitWater&&q.vy<0&&q.y<=waterCeiling+.05&&q.y<=waveH(q.x,q.z)+.03){q.hitWater=true;q.life=Math.min(q.life,.15);
+        if(!q.jet)spawn(1,q.x,q.z,q.vx*.1,q.vz*.1,clamp(q.s*.35,.12,.45),.7,.2);}
       const f=q.life/q.max;q.sp.position.set(q.x,q.y,q.z);
       if(q.streak){v3a.set(q.x,q.y,q.z).project(camera);v3b.set(q.x+q.vx*.06,q.y+q.vy*.06,q.z+q.vz*.06).project(camera);
         const dx=(v3b.x-v3a.x)*AW,dy=(v3b.y-v3a.y)*AH,spd=Math.hypot(q.vx,q.vy,q.vz);q.sp.material.rotation=Math.atan2(dy,dx);
@@ -979,14 +1047,15 @@ const MAXW=4200,washTex=new T3.CanvasTexture((()=>{
   // 3 crisp foam clumps
   for(let i=0;i<90;i++){const a=Math.random()*6.28,d=Math.pow(Math.random(),.7)*n*.4,r=1.5+Math.random()*n*.07*(1-d/(n*.45));g.fillStyle='rgba(255,255,255,'+(.35+Math.random()*.65)+')';g.beginPath();g.arc(n*3.5+Math.cos(a)*d,n/2+Math.sin(a)*d,r,0,6.2832);g.fill();}
   return t;})());
-const FW=340,FR=512,mkRT=()=>new T3.WebGLRenderTarget(FR,FR,{minFilter:T3.LinearFilter,magFilter:T3.LinearFilter,depthBuffer:false,stencilBuffer:false});
+const FW=340,FR=waterTier.foamResolution,FOAM_STEP=1/30,mkRT=()=>new T3.WebGLRenderTarget(FR,FR,{minFilter:T3.LinearFilter,magFilter:T3.LinearFilter,depthBuffer:false,stencilBuffer:false});
+let foamAccumulator=0,foamLife=0;
 let rtA=mkRT(),rtB=mkRT();const fC=new T3.Vector2(),fPrev=new T3.Vector2(),fScene=new T3.Scene(),fCam=new T3.Camera();
 // pass 1: carry last frame's foam forward (shifted as the window follows the boat), spread it a touch and let it die away
-const fadeMat=new T3.ShaderMaterial({uniforms:{tPrev:{value:null},uShift:{value:new T3.Vector2()},uDecay:{value:.9},uTexel:{value:1/FR}},depthTest:false,depthWrite:false,
+const fadeMat=new T3.ShaderMaterial({uniforms:{tPrev:{value:null},uShift:{value:new T3.Vector2()},uDecay:{value:.9},uTexel:{value:1/FR},uSpread:{value:0}},depthTest:false,depthWrite:false,
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}`,
-  fragmentShader:`uniform sampler2D tPrev;uniform vec2 uShift;uniform float uDecay,uTexel;varying vec2 vUv;
+  fragmentShader:`uniform sampler2D tPrev;uniform vec2 uShift;uniform float uDecay,uTexel,uSpread;varying vec2 vUv;
   void main(){vec2 u=vUv+uShift;vec4 c=vec4(0.);float e=uTexel;
-    if(u.x>e&&u.x<1.-e&&u.y>e&&u.y<1.-e)c=texture2D(tPrev,u)*.6+(texture2D(tPrev,u+vec2(e,0.))+texture2D(tPrev,u-vec2(e,0.))+texture2D(tPrev,u+vec2(0.,e))+texture2D(tPrev,u-vec2(0.,e)))*.1;
+    if(u.x>e&&u.x<1.-e&&u.y>e&&u.y<1.-e)c=texture2D(tPrev,u)*(1.-4.*uSpread)+(texture2D(tPrev,u+vec2(e,0.))+texture2D(tPrev,u-vec2(e,0.))+texture2D(tPrev,u+vec2(0.,e))+texture2D(tPrev,u-vec2(0.,e)))*uSpread;
     gl_FragColor=c*uDecay;}`});
 const fQuad=new T3.Mesh(new T3.PlaneGeometry(2,2),fadeMat);fQuad.frustumCulled=false;fScene.add(fQuad);
 // pass 2: stamp every wash particle in (red = foam, green = dark churned water)
@@ -1002,9 +1071,17 @@ const stampMat=new T3.ShaderMaterial({uniforms:{map:{value:washTex},uC:{value:ne
 const stamps=new T3.Mesh(sGeo,stampMat);stamps.frustumCulled=false;stamps.renderOrder=1;fScene.add(stamps);
 function foamPass(dt){
   // Keep the previous world-space foam field frozen while paused, including during camera movement.
-  if(dt<=0)return;
-  const tx=FW/FR,keep=Math.pow(.5,dt/.3),add=1-keep;fC.set(Math.round(cam.x/tx)*tx,Math.round(cam.y/tx)*tx);
+  if(!(dt>0)||!Number.isFinite(dt))return;
+  foamAccumulator+=Math.min(MAX_FRAME_TIME,dt);
+  const ticks=Math.min(4,Math.floor((foamAccumulator+1e-9)/FOAM_STEP));
+  foamAccumulator=Math.max(0,foamAccumulator-ticks*FOAM_STEP);
+  for(let tick=0;tick<ticks;tick++)advanceFoam();
+}
+function advanceFoam(){
+  const {decay:keep,stampWeight:add,spread}=foamParameters(FOAM_STEP),tx=FW/FR;
+  fC.set(Math.round(cam.x/tx)*tx,Math.round(cam.y/tx)*tx);
   fadeMat.uniforms.tPrev.value=rtA.texture;fadeMat.uniforms.uShift.value.set((fC.x-fPrev.x)/FW,(fC.y-fPrev.y)/FW);fadeMat.uniforms.uDecay.value=keep;
+  fadeMat.uniforms.uSpread.value=spread*(FR/512)**2;
   let n=0;
   for(const q of parts){if(q.k===2||q.k===3||n>=MAXW)continue;
     const f=q.life/q.max,a=Math.min(1,(q.max-q.life)*(q.k===1?5:2))*f*add;
@@ -1012,8 +1089,11 @@ function foamPass(dt){
     if(q.k===0)sC.setXYZ(n,.3*a,0,0);else if(q.k===1)sC.setXYZ(n,.95*a,0,3);else if(q.k===4)sC.setXYZ(n,.12*a,1.1*a,2);else sC.setXYZ(n,.1*a,.8*a,1);
     n++;}
   sGeo.instanceCount=n;stamps.visible=n>0;uploadActive(sP,n);uploadActive(sC,n);stampMat.uniforms.uC.value.set(fC.x,fC.y,FW);
+  if(n)foamLife=3;
+  else if(foamLife>0){foamLife=Math.max(0,foamLife-FOAM_STEP);if(!foamLife){clearFoamField();return;}}
+  else return;
   const previousTarget=renderer.getRenderTarget();
-  renderer.setRenderTarget(rtB);renderer.render(fScene,fCam);renderer.setRenderTarget(previousTarget);
+  try{renderer.setRenderTarget(rtB);renderer.render(fScene,fCam);}finally{renderer.setRenderTarget(previousTarget);}
   const t=rtA;rtA=rtB;rtB=t;fPrev.copy(fC);U.tFoam.value=rtA.texture;U.uFoamC.value.set(fC.x,fC.y,FW);
 }
 // distant cliffs, lost in the murk
@@ -1026,6 +1106,9 @@ function foamPass(dt){
 // berth marker
 const slipG=new T3.Group(),slipFill=new T3.MeshBasicMaterial({color:0xffb547,transparent:true,opacity:.14,depthWrite:false,fog:false}),slipLine=new T3.LineBasicMaterial({color:0xffb547,fog:false});
 scene3.add(slipG);
+const waypointPoints=[];for(let i=0;i<40;i++){const angle=i/40*TAU;waypointPoints.push(new T3.Vector3(Math.cos(angle),0,Math.sin(angle)));}
+const waypointRing=new T3.LineLoop(new T3.BufferGeometry().setFromPoints(waypointPoints),new T3.LineBasicMaterial({color:0x66d9ff,transparent:true,opacity:.8,depthWrite:false,fog:false}));
+waypointRing.visible=false;scene3.add(waypointRing);
 let lvG=null,pirate=null;
 function build3D(){
   if(lvG)disposeTransientGroup(lvG);
@@ -1048,7 +1131,7 @@ function build3D(){
     if(q.t==='east'){const yel=M('#f2c230',.6),blk=M('#16181b',.6);
       const p1=new T3.Mesh(new T3.CylinderGeometry(.5,.6,1.2,10),blk);p1.position.y=.6;const p2=new T3.Mesh(new T3.CylinderGeometry(.5,.5,1.2,10),yel);p2.position.y=1.8;
       const p3=new T3.Mesh(new T3.CylinderGeometry(.42,.5,1,10),blk);p3.position.y=2.9;
-      const c1=new T3.Mesh(new T3.ConeGeometry(.45,.6,10),blk);c1.position.y=3.9;const c2=new T3.Mesh(new T3.ConeGeometry(.45,.6,10),blk);c2.position.y=4.55;c2.rotation.x=Math.PI;
+      const c1=new T3.Mesh(new T3.ConeGeometry(.45,.6,10),blk);c1.position.y=3.9;c1.rotation.x=Math.PI;const c2=new T3.Mesh(new T3.ConeGeometry(.45,.6,10),blk);c2.position.y=4.55;
       g.add(p1,p2,p3,c1,c2);}
     else{const m=M(red?'#d23a2c':'#1f9a4a',.55),body=new T3.Mesh(new T3.CylinderGeometry(.55,.7,2.2,12),m);body.position.y=1.1;g.add(body);
       const top=red?new T3.Mesh(new T3.CylinderGeometry(.5,.5,.9,12),m):new T3.Mesh(new T3.ConeGeometry(.55,1.1,12),m);top.position.y=red?2.65:2.75;g.add(top);
@@ -1091,9 +1174,9 @@ function pose(g,st,x,z,psi,l,b,roll,pitch,dt,gn){gn=gn||1;
   const ty=(waveH(x,z)*.4+(hf+ha+hp+hs)*.15)*k*Math.min(gn,1.5),trx=-Math.atan2(hs-hp,2*hb)*k*1.1*gn-roll,trz=Math.atan2(hf-ha,2*hl)*k*1.2*gn+pitch;
   // each boat has its own roll, pitch and heave period, so it lags the wave and overshoots
   const wr=TAU/(1.6*Math.sqrt(b)),wp=TAU/(.5*Math.sqrt(l)),wh=TAU/2.2;
-  st.vrx+=(wr*wr*(trx-st.rx)-.44*wr*st.vrx)*dt;st.rx+=st.vrx*dt;
-  st.vrz+=(wp*wp*(trz-st.rz)-.7*wp*st.vrz)*dt;st.rz+=st.vrz*dt;
-  st.vy+=(wh*wh*(ty-st.y)-wh*st.vy)*dt;st.y+=st.vy*dt;
+  stepDampedSpring(st,'rx','vrx',trx,wr,.22,dt);
+  stepDampedSpring(st,'rz','vrz',trz,wp,.35,dt);
+  stepDampedSpring(st,'y','vy',ty,wh,.5,dt);
   g.position.set(x,st.y,z);g.rotation.set(st.rx,-psi,st.rz);
 }
 const ownDyn=newDyn();
@@ -1110,9 +1193,12 @@ function resetVisuals(){
   for(const wake of U.uWake.value)wake.set(0,0,0,0);
   wkI=0;wkX=S.x;wkY=S.y;wkT=T;
   chainLinks.count=0;[...ropes,...leads,...whip,chainM,chainM2,hose].forEach(mesh=>{mesh.visible=false;});
-  sGeo.instanceCount=0;stamps.visible=false;fC.set(cam.x,cam.y);fPrev.copy(fC);
+  sGeo.instanceCount=0;stamps.visible=false;foamAccumulator=0;foamLife=0;fC.set(cam.x,cam.y);fPrev.copy(fC);
   U.uFoamC.value.set(fC.x,fC.y,FW);U.tFoam.value=rtA.texture;
   shC.x=slip.x;shC.y=slip.y;
+  clearFoamField();
+}
+function clearFoamField(){
   // Clear both ping-pong targets so old wash cannot bleed into a restarted berth.
   if(renderer.getContext().isContextLost())return;
   const previousTarget=renderer.getRenderTarget(),previousAlpha=renderer.getClearAlpha();
@@ -1216,8 +1302,8 @@ const hullHW=xm=>{const x=xm/SL,P=[[25,0],[19,2.9],[10,4.5],[-5,4.7],[-25,4.3]];
   for(let i=0;i<P.length-1;i++)if(x<=P[i][0]&&x>=P[i+1][0]){const t=(P[i][0]-x)/(P[i][0]-P[i+1][0]);return (P[i][1]+(P[i+1][1]-P[i][1])*t)*SB;}return 4.5*SB;};
 // a point just outboard of the hull at a fairlead: lines and chain start here, so they never cut through the ship
 const fairPt=(xm,sd,lift)=>v3a.set(xm,(shipId==='tender'?deckY-.25:deckY-.46*SL)+sheerAt(xm)+(lift||0),sd*(hullHW(xm)+.18)).applyMatrix4(own.matrixWorld);
-function sync3D(dt){
-  if(pirate){pirate.arm.rotation.z=-.4+Math.sin(T*6)*.9;pirate.arm.rotation.x=Math.sin(T*3)*.3;pirate.g.position.y=1.9+Math.abs(Math.sin(T*3))*.25;}
+// Weather and mission clocks advance with the simulation, including during frame catch-up.
+function advanceMissionEnvironment(dt){
   if(stops&&stops[S.stage].anchor&&!S.nightOn&&state==='play'){
     const d=Math.hypot(slip.x-S.x,slip.y-S.y);if(!S.leg0)S.leg0={d:Math.max(d,80),wk:env.wk,sh:env.sh};
     const f=clamp(1-d/S.leg0.d,0,1),ss=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);},up=ss(0,.3,f),down=ss(.55,1,f);
@@ -1228,29 +1314,45 @@ function sync3D(dt){
   }
   if(S.nightOn&&S.night<1){S.night=Math.min(1,S.night+dt/6);applyNight(S.night);}
   if(S.nightOn){S.uw=Math.min(1,(S.uw||0)+dt/3);S.partyK=Math.max(0,(S.partyK==null?1:S.partyK)-dt/3);}
-  // anchor down: the camera swings to a low, slow cinematic angle, the anchor light goes up, then the result
-  if(S.cineT!=null){S.cineT+=dt;
-    if(S.cineT<9){pitch+=(.16-pitch)*Math.min(1,dt*.6);zoomMul+=(.5-zoomMul)*Math.min(1,dt*.5);}
-    rotv+=dt*(S.cineT<9?.1:.045); // a slow orbit that carries on
-    if(S.cineT>9&&!S.cineDone){S.cineDone=true;finish('mission');}}
+  if(S.cineT!=null){
+    if(!S.cineView){
+      S.cineView={pitch,zoomMul,rotv,topDown,chase,x:camOff.x,y:camOff.y};
+      if(!reduceMotion){topDown=false;chase=false;}
+      releaseControls();S.lever=[0,0];refreshModalState();
+      toast('Anchorage secured · mission complete',4500);
+    }
+    S.cineT+=dt;
+    if(S.cineT>=(reduceMotion?0:4.5)&&!S.cineDone){S.cineDone=true;finish('mission');refreshModalState();}
+  }
+  if(S.nightOn&&S.night>=1)S.calmT=(S.calmT||0)+dt;
+  const blend=1-Math.exp(-dt*.3);shC.x+=(slip.x-shC.x)*blend;shC.y+=(slip.y-shC.y)*blend;U.uSlip.value.set(shC.x,shC.y,GEO);
+}
+function sync3D(dt){
+  if(pirate){pirate.arm.rotation.z=-.4+Math.sin(T*6)*.9;pirate.arm.rotation.x=Math.sin(T*3)*.3;pirate.g.position.y=1.9+Math.abs(Math.sin(T*3))*.25;}
+  // The camera and lights follow the fixed-step mission state.
+  if(S.cineT!=null&&S.cineView&&!reduceMotion){
+    const blend=1-Math.exp(-dt*.7);
+    pitch+=(.24-pitch)*blend;zoomMul+=(.65-zoomMul)*blend;
+    camOff.x+=((slip.x-S.x)*.25-camOff.x)*blend;camOff.y+=((slip.y-S.y)*.25-camOff.y)*blend;
+    rotv+=dt*(S.cineT<4.5?.1:.035);
+  }
   {const q=S.cineT==null?0:clamp((S.cineT-1.2)/2.2,0,1);anchMast.scale.y=Math.max(.001,q);anchMast.visible=q>0;anchLamp.visible=q>=1;}
   {const nv=U.uNight.value;navGlow.forEach(g=>{g.material.opacity=nv*.55;g.visible=nv>.02;});}
-  if(S.nightOn&&S.night>=1)S.calmT=(S.calmT||0)+dt;
   U.uUW.value=S.uw||0;
-  U.uT.value=T;setWaves();U.uKing.value.set(KW.d[0],KW.d[1],KW.pos,KW.on?KW.A:0);shC.x+=(slip.x-shC.x)*Math.min(1,dt*.3);shC.y+=(slip.y-shC.y)*Math.min(1,dt*.3);U.uSlip.value.set(shC.x,shC.y,GEO);
+  U.uT.value=T;setWaves();U.uKing.value.set(KW.d[0],KW.d[1],KW.pos,KW.on?KW.A:0);U.uSlip.value.set(shC.x,shC.y,GEO);
   // heel in the turn, trim with the throttle, and a lurch when she hits something
-  ownDyn.acc+=((S.u-ownDyn.pu)/Math.max(dt,.001)-ownDyn.acc)*Math.min(1,dt*3);ownDyn.pu=S.u;
+  ownDyn.acc+=((S.u-ownDyn.pu)/Math.max(dt,.001)-ownDyn.acc)*(1-Math.exp(-dt*3));ownDyn.pu=S.u;
   if(S.kick){ownDyn.vrx+=(Math.random()<.5?-1:1)*Math.min(.25,S.kick*.12);ownDyn.vrz-=.04*Math.min(2,S.kick);S.kick=0;}
   const heel=clamp(S.u*S.r*.5,-.09,.09),trim=clamp(ownDyn.acc*.03,-.04,.04)+(shipId==='tender'?Math.min(.08,Math.max(0,S.u)*.011):0);
   if(!isFinite(ownDyn.y+ownDyn.rx+ownDyn.rz+ownDyn.acc))Object.assign(ownDyn,newDyn());
   pose(own,ownDyn,RX,RY,RP,LEN,BEAM,S.roll*.6+heel-(S.listV||0),trim,dt);
   if(ownModel&&ownModel.userData.radar)ownModel.userData.radar.rotation.y+=dt*2.6;
   for(const o of obstacles)if(o.kind==='boat'&&o.mesh.userData.radar)o.mesh.userData.radar.rotation.y+=dt*2.2;
-  for(const q of buoys)if(q.m){q.m.position.y=waveH(q.x,q.y)*1.1-.2;q.m.rotation.x=Math.sin(T*1.3+q.x)*.08;q.m.rotation.z=Math.cos(T*1.1+q.y)*.08;}
+  for(const q of buoys)if(q.m){const water=waveSampleAt(q.x,q.y);q.m.position.y=water.height-.2;q.m.rotation.x=clamp(-Math.atan(water.slopeZ),-.25,.25);q.m.rotation.z=clamp(Math.atan(water.slopeX),-.25,.25);}
   for(const o of obstacles)if(o.kind==='boat'){o.dyn=o.dyn||newDyn();
     // moored boats surge on their lines with each swell, and roll and pitch more freely than a boat under way
-    const w0=WV[0],sg=w0.amp*shelter(o.x,o.y)*1.6*Math.sin(w0.k*(w0.dx*o.x+w0.dz*o.y)-w0.om*T-.8);
-    pose(o.mesh,o.dyn,o.x+w0.dx*sg,o.y+w0.dz*sg,o.psi,o.l,o.b,0,0,dt,2.4);}
+    const moving=o.tr&&o.tr.st==='go',w0=WV[0],sg=moving?0:w0.amp*shelter(o.x,o.y)*1.6*Math.sin(w0.k*(w0.dx*o.x+w0.dz*o.y)-w0.om*T-.8);
+    pose(o.mesh,o.dyn,o.x+w0.dx*sg,o.y+w0.dz*sg,o.psi,o.l,o.b,0,0,dt,moving?1:2.4);}
   U.uShip.value.set(S.x,S.y,Math.cos(S.psi),Math.sin(S.psi));U.uSlop.value=Math.min(.22,Math.abs(ownDyn.vy)*.45+Math.abs(ownDyn.vrx)*1.4);U.uHull.value.set(LEN/2,BEAM/2,S.u,S.v);U.uProp.value.set((S.rpm[0]+S.rpm[1])/2,S.thrAct);
   // foam thrown off the bow as it drops into a wave
   if(state==='play'&&ownDyn.vrz<-.02&&Math.hypot(S.u,S.v)>1&&Math.random()<dt*40){const c0=Math.cos(S.psi),s0=Math.sin(S.psi),sd=Math.random()<.5?-1:1;
@@ -1322,6 +1424,9 @@ function sync3D(dt){
     else S.snap=null;}
   else whip[0].visible=whip[1].visible=false;
   slipG.visible=!(stops&&S.done);
+  {const nav=navigationStatus(),waypoint=nav.waypoint,goal=nav.finalTarget;
+    waypointRing.visible=state==='play'&&!S.done&&Math.hypot(waypoint[0]-goal[0],waypoint[1]-goal[1])>1;
+    if(waypointRing.visible){waypointRing.position.set(waypoint[0],waveH(waypoint[0],waypoint[1])+.45,waypoint[1]);waypointRing.scale.setScalar(Math.max(3,LEN*.12));}}
   const hex=S.inPos?0x3ddc84:0xffb547;slipFill.color.setHex(hex);slipLine.color.setHex(hex);slipFill.opacity=S.inPos?.16+.25*S.hold/3:.13;
   foamPass(dt);
 }
@@ -1350,26 +1455,37 @@ function hudFast(){
    const t=(+ri.value+35)/70,a=Math.min(t,.5),b=Math.max(t,.5),pc=x=>'calc(17px + (100% - 34px) * '+x+')';
    if(g)g.style.left=pc(t);ri.style.setProperty('--fa',pc(a));ri.style.setProperty('--fb',pc(b));}
 }
+function updateAnchorageGoal(){
+  const box=$('anchorGoal'),show=state==='play'&&stops&&stops[S.stage].anchor&&!S.done;
+  box.hidden=!show;if(!show)return;
+  const goal=anchorageStatus(),paid=Math.floor(Math.max(0,goal.current)*10+1e-8)/10;
+  const setText=(id,text)=>{const el=$(id);if(el.textContent!==text)el.textContent=text;};
+  setText('anchorPaid',paid.toFixed(1));setText('anchorNeed',String(goal.target));setText('anchorHint',goal.status);
+  const progress=$('anchorProgress');progress.setAttribute('aria-valuemax',goal.target);progress.setAttribute('aria-valuenow',Math.min(goal.target,paid));
+  progress.firstElementChild.style.width=Math.min(100,100*goal.current/goal.target)+'%';
+  box.classList.toggle('ready',goal.inside&&goal.held&&goal.current>=goal.target);
+}
 function updateMooringUI(){
+  updateAnchorageGoal();
   lnBtns.forEach((b,i)=>{const st=lines[i].state;
     const cls='ln'+(i>3?' sp':'')+(st==='throw'||st==='haul'?' t':st==='fast'?' f':'')+(sel===i?' sel':''),tx=st==='fast'?'✓':st==='stowed'?'':'…';
     if(b.className!==cls)b.className=cls;if(b.textContent!==tx)b.textContent=tx;});
   for(const button of FEND_BTNS){const chosen=+button.dataset.fender===S.fend;button.classList.toggle('on',chosen);button.setAttribute('aria-pressed',String(chosen));}
   const out=lines.filter(l=>l.state!=='stowed'),fast=out.filter(l=>l.state==='fast'),a=S.anchors[0];
-  const statuses={anchors:S.anchorCmd?'Working':S.anchors.length>1?'Both':a?(a.side<0?'Port':a.side>0?'Starboard':'Bow'):'',lines:out.length?out.length+' '+(fast.length===out.length?'fast':'out'):'',fenders:FENDL[S.fend]||(S.fendN.some(n=>n>0)?'Stowing':'')};
+  const statuses={anchors:S.anchorCmd?'Working':S.anchors.some(a=>a.weighing)?'Weighing':S.anchors.length>1?'Both':a?(a.side<0?'Port':a.side>0?'Starboard':'Bow'):'',lines:out.length?out.length+' '+(fast.length===out.length?'fast':'out'):'',fenders:FENDL[S.fend]||(S.fendN.some(n=>n>0)?'Stowing':'')};
   for(const section of ['anchors','lines','fenders']){const text=statuses[section],status=$(section+'Status');if(status.textContent!==text)status.textContent=text;$(section+'T').classList.toggle('has-equipment',!!text);}
   {const sb=$('anchSel'),ab=$('anchAct'),down=S.anchors.length,L=down?Math.round(Math.max(...S.anchors.map(a=>a.L0))):0;
-    const st=shipId==='tender'?'Anchor · bow':['Anchor · P','Anchor · S','Anchor · both'][S.anchSel],at=S.anchorCmd?'Standing by':!down?'Let go':S.anchors.some(a=>!a.held)?'Hold · '+L+' m':'Weigh · '+L+' m';
+    const st=shipId==='tender'?'Anchor · bow':['Anchor · P','Anchor · S','Anchor · both'][S.anchSel],at=S.anchorCmd?'Standing by':!down?'Let go':S.anchors.some(a=>a.weighing)?'Hold chain · '+L+' m':S.anchors.some(a=>!a.held)?'Hold · '+L+' m':'Weigh · '+L+' m';
     if(sb.textContent!==st)sb.textContent=st;if(ab.textContent!==at)ab.textContent=at;ab.classList.toggle('on',!!down||S.anchorCmd);}
   if(aSel!=null&&!S.anchors.some(a=>a.side===aSel)){releaseMooringInputs();aSel=null;}const aA=aSel!=null?S.anchors.find(a=>a.side===aSel):null;
-  {const A=preferredAnchor(),cr=$('chainRow'),tx=$('scopeTx'),sc=Math.round(18*Math.max(.7,SL));if(cr.hidden!==!A)cr.hidden=!A;if(tx.hidden!==!A)tx.hidden=!A;
-    if(A){const t=A.drag?'Dragging · '+Math.round(A.L0)+' m':A.set?'Holding · '+Math.round(A.L0)+' m':A.L0<sc?'Chain '+Math.round(A.L0)+' m · need '+sc:'Chain '+Math.round(A.L0)+' m · hold it';
+  {const A=preferredAnchor(),cr=$('chainRow'),tx=$('scopeTx'),sc=Math.ceil(18*Math.max(.7,SL));if(cr.hidden!==!A)cr.hidden=!A;if(tx.hidden!==!A)tx.hidden=!A;
+    if(A){const t=A.weighing?'Weighing · '+Math.round(A.L0)+' m':A.drag?'Dragging · '+Math.round(A.L0)+' m':A.set?'Holding · '+Math.round(A.L0)+' m':A.L0<sc?'Chain '+Math.round(A.L0)+' m · need '+sc:'Chain '+Math.round(A.L0)+' m · hold it';
       if(tx.textContent!==t)tx.textContent=t;tx.className='lt'+(A.set&&!A.drag?' ok':A.drag?' bad':'');}}
   ANC.forEach(b=>{const sd=shipId==='tender'?0:+b.dataset.a,A=S.anchors.find(a=>a.side===sd),cls='anc'+(A?(A.drag?' d':A.set?' f':' t'):'')+(aSel===sd&&A?' sel':'');if(b.className!==cls)b.className=cls;});
   const one=sel>=0&&lines[sel].state==='fast'?lines[sel]:null,hd=mooringSection==='anchors'?!!aA:mooringSection==='lines'&&fast.length>0,ab=$('actBox');
   if(!hd&&!ab.hidden)releaseMooringInputs();if(ab.hidden!==!hd)ab.hidden=!hd;
   if(hd){const tn=aA?0:one?one.ten:Math.max(...lines.map(l=>l.state==='fast'?l.ten:0)),tx=aA?'Anchor '+(aA.side<0?'P':aA.side>0?'S':'')+' · '+Math.round(aA.L0)+' m':one?one.name:'All lines';
-    ACT_METER.hidden=!!aA;const releaseText=aA?'Weigh':'Let go';if($('lgBtn').textContent!==releaseText)$('lgBtn').textContent=releaseText;
+    ACT_METER.hidden=!!aA;const releaseText=aA?(aA.weighing?'Hold chain':'Weigh'):'Let go';if($('lgBtn').textContent!==releaseText)$('lgBtn').textContent=releaseText;
     $('actFill').style.width=Math.min(100,tn/(67e3*LK)*100)+'%';$('actFill').style.background=lines.some(l=>l.strain>.35)?'var(--port)':'var(--amber)';const nm=$('actName');if(nm.textContent!==tx)nm.textContent=tx;
     $('hvBtn').classList.toggle('on',haul>0);$('slBtn').classList.toggle('on',haul<0);}
 }
@@ -1420,10 +1536,39 @@ function frame(now){
   finally{drawingFrame=false;}
   if(!rafId&&!document.hidden&&!contextUnavailable&&((state==='play'&&!hold)||now<renderUntil))rafId=requestAnimationFrame(frame);
 }
+// Crew work changes anchors and fender protection, so it uses the fixed simulation clock.
+function advanceDeckWork(dt){
+  for(const h of hands){const dx=h.tx-h.x,dy=h.ty-h.y,d=Math.hypot(dx,dy);if(d>.05){const m=Math.min(d,3.5*dt);h.x+=dx/d*m;h.y+=dy/d*m;}}
+  const act=l=>l.state==='queued'||l.state==='throw',by=act(lines[0])?-1.3:act(lines[1])?1.3:lines[0].state==='fast'&&lines[1].state!=='fast'?-1.3:lines[1].state==='fast'&&lines[0].state!=='fast'?1.3:0;
+  S.bowY+=clamp((S.anchorCmd||S.anchors.some(a=>!a.held)?0:by)-S.bowY,-1.5*dt,1.5*dt);
+  // bow hand walks forward to let the anchor go
+  /* crew go inside while she is under way, and come back out as she nears the berth or there is work on deck */
+  var goIn=shipId!=='tender'&&Math.hypot(slip.x-S.x,slip.y-S.y)>Math.max(80,LEN*1.8)&&!lines.some(l=>l.state!=='stowed')&&!S.anchors.length&&!S.anchorCmd&&!S.fend&&S.fendN[0]+S.fendN[1]<.01;
+  const bxT=S.anchorCmd||S.anchors.some(a=>!a.held)?23.2:goIn?13.8:19.5;S.bowX+=clamp(bxT-S.bowX,-2.2*dt/SL,2.2*dt/SL);
+  crew[0].visible=!(goIn&&Math.abs(S.bowX-13.8)<.2&&Math.abs(S.bowY)<.2);
+  if(S.anchorCmd&&Math.abs(S.bowX-23.2)<.1){
+    const c0=Math.cos(S.psi),s0=Math.sin(S.psi);S.anchorCmd=false;
+    const dsides=(S.dropSides||anchSides()).filter(sd=>!S.anchors.some(a=>a.side===sd));S.dropSides=null;if(!dsides.length)dsides.push(anchSides()[0]);
+    for(const sd of dsides){const hp=hawseFor(sd),ax=S.x+hp[0]*c0-hp[1]*s0,ay=S.y+hp[0]*s0+hp[1]*c0;S.anchors.push({side:sd,x:ax,y:ay,L0:3,held:false,t:0});}
+    const nm=dsides.length>1?'Both anchors':['Port','Bow','Starboard'][dsides[0]+1]+' anchor';toast(nm+' away · chain running',1500);
+    const ax=S.x+hawseFor(dsides[0])[0]*c0,ay=S.y+hawseFor(dsides[0])[0]*s0;
+    for(let i=0;i<16;i++)spawn(1,ax+rnd(-1,1),ay+rnd(-1,1),rnd(-1.8,1.8),rnd(-1.8,1.8),rnd(.5,.9),rnd(1.2,2.6),.6);wakeDrop(ax,ay,1.3);
+  }
+  // stern hands rig or strike the fenders one at a time, working forward
+  for(let sdI=0;sdI<2;sdI++){
+    const want=(S.fend&(sdI?2:1))?4:0,n=S.fendN[sdI],man=crew[1+sdI];let tx=goIn?-15.9*SL:-22.5*SL;
+    if(n===0)for(let i=0;i<4;i++)S.fPop[i*2+sdI]=0; // fresh fenders next time they are rigged
+    if(n!==want){const idx=want>n?Math.floor(n+.001):Math.ceil(n-.001)-1;tx=FENDX[clamp(idx,0,3)]*LEN/2;
+      if(Math.abs(man.position.x-tx)<.5)S.fendN[sdI]=want>n?Math.min(want,n+dt/1.1):Math.max(want,n-dt/.8);}
+    man.position.x+=clamp(tx-man.position.x,-2.6*dt,2.6*dt);
+    {const x=man.position.x,sideZ=goIn?1.3*SB:x>-16*SL?Math.max(2.8*SB,hullHW(x)-.75*SB):2.8*SB,zt=(sdI?1:-1)*sideZ;man.position.z+=clamp(zt-man.position.z,-2.2*dt,2.2*dt);
+     man.visible=!(goIn&&Math.abs(man.position.x-tx)<.3&&Math.abs(man.position.z-zt)<.3);}
+  }
+}
 function drawFrame(now){
   const raw=Math.max(0,(now-last)/1000),rdt=Math.min(MAX_FRAME_TIME,raw),active=state==='play'&&!hold;
   let dt=active?rdt:0;last=now;measureLayout();
-  if(active&&qualityController.sample(raw)){qual=qualityController.scale;U.uLow.value=qualityController.low?1:0;resize();}
+  if(active&&qualityController.sample(raw)){qual=qualityController.scale;applyWaterQuality(qualityController.low);resize();}
   else if(!active)qualityController.resetTiming();
   if(active){
     const plan=planSimulationSteps(acc,dt),epoch=frameEpoch;acc=plan.remainder;
@@ -1439,34 +1584,6 @@ function drawFrame(now){
     const tb=p.k===2?0:1.1;
     p.vx+=(Math.cos(p.y*.4+T*1.3+p.s)*tb+wd[0]*wsp)*dt;p.vy+=(Math.sin(p.x*.4-T*1.1+p.s)*tb+wd[1]*wsp)*dt;
     p.x+=p.vx*dt;p.y+=p.vy*dt;const d=1-.75*dt;p.vx*=d;p.vy*=d;p.size+=p.g*dt;}
-  if(active&&dt>0){
-    for(const h of hands){const dx=h.tx-h.x,dy=h.ty-h.y,d=Math.hypot(dx,dy);if(d>.05){const m=Math.min(d,3.5*dt);h.x+=dx/d*m;h.y+=dy/d*m;}}
-    const act=l=>l.state==='queued'||l.state==='throw',by=act(lines[0])?-1.3:act(lines[1])?1.3:lines[0].state==='fast'&&lines[1].state!=='fast'?-1.3:lines[1].state==='fast'&&lines[0].state!=='fast'?1.3:0;
-    S.bowY+=clamp((S.anchorCmd||S.anchors.some(a=>!a.held)?0:by)-S.bowY,-1.5*dt,1.5*dt);
-    // bow hand walks forward to let the anchor go
-    /* crew go inside while she is under way, and come back out as she nears the berth or there is work on deck */
-    var goIn=shipId!=='tender'&&Math.hypot(slip.x-S.x,slip.y-S.y)>Math.max(80,LEN*1.8)&&!lines.some(l=>l.state!=='stowed')&&!S.anchors.length&&!S.anchorCmd&&!S.fend&&S.fendN[0]+S.fendN[1]<.01;
-    const bxT=S.anchorCmd||S.anchors.some(a=>!a.held)?23.2:goIn?13.8:19.5;S.bowX+=clamp(bxT-S.bowX,-2.2*dt/SL,2.2*dt/SL);
-    crew[0].visible=!(goIn&&Math.abs(S.bowX-13.8)<.2&&Math.abs(S.bowY)<.2);
-    if(S.anchorCmd&&Math.abs(S.bowX-23.2)<.1){
-      const c0=Math.cos(S.psi),s0=Math.sin(S.psi);S.anchorCmd=false;
-      const dsides=(S.dropSides||anchSides()).filter(sd=>!S.anchors.some(a=>a.side===sd));S.dropSides=null;if(!dsides.length)dsides.push(anchSides()[0]);
-      for(const sd of dsides){const hp=hawseFor(sd),ax=S.x+hp[0]*c0-hp[1]*s0,ay=S.y+hp[0]*s0+hp[1]*c0;S.anchors.push({side:sd,x:ax,y:ay,L0:3,held:false,t:0});}
-      const nm=dsides.length>1?'Both anchors':['Port','Bow','Starboard'][dsides[0]+1]+' anchor';toast(nm+' away · chain running',1500);
-      const ax=S.x+hawseFor(dsides[0])[0]*c0,ay=S.y+hawseFor(dsides[0])[0]*s0;
-      for(let i=0;i<16;i++)spawn(1,ax+rnd(-1,1),ay+rnd(-1,1),rnd(-1.8,1.8),rnd(-1.8,1.8),rnd(.5,.9),rnd(1.2,2.6),.6);wakeDrop(ax,ay,1.3);
-    }
-    // stern hands rig or strike the fenders one at a time, working forward
-    for(let sdI=0;sdI<2;sdI++){
-      const want=(S.fend&(sdI?2:1))?4:0,n=S.fendN[sdI],man=crew[1+sdI];let tx=goIn?-15.9*SL:-22.5*SL;
-      if(n===0)for(let i=0;i<4;i++)S.fPop[i*2+sdI]=0; // fresh fenders next time they are rigged
-      if(n!==want){const idx=want>n?Math.floor(n+.001):Math.ceil(n-.001)-1;tx=FENDX[clamp(idx,0,3)]*LEN/2;
-        if(Math.abs(man.position.x-tx)<.5)S.fendN[sdI]=want>n?Math.min(want,n+dt/1.1):Math.max(want,n-dt/.8);}
-      man.position.x+=clamp(tx-man.position.x,-2.6*dt,2.6*dt);
-      {const x=man.position.x,sideZ=goIn?1.3*SB:x>-16*SL?Math.max(2.8*SB,hullHW(x)-.75*SB):2.8*SB,zt=(sdI?1:-1)*sideZ;man.position.z+=clamp(zt-man.position.z,-2.2*dt,2.2*dt);
-       man.visible=!(goIn&&Math.abs(man.position.x-tx)<.3&&Math.abs(man.position.z-zt)<.3);}
-    }
-  }
   const VW=AW;
   // leave ripples where the hull has been
   if(active&&dt>0){const sp=Math.hypot(S.u,S.v),c0=Math.cos(S.psi),s0=Math.sin(S.psi),act=Math.max(Math.abs(S.rpm[0]),Math.abs(S.rpm[1]));
@@ -1505,7 +1622,7 @@ const hudEl=document.querySelector('.hud'),ptr=$('ptr'),compact=matchMedia('(ori
 let sync=false;const held=Object.create(null),detent=[0,0];
 const inputSources=new Map(),capturedPointers=new Map(),inputResetters=[],bumpResetters=[],mooringResetters=[],mooringButtons=new Set(),bumpOwned=[false,false];
 let holdBinding=0;
-const canDrive=()=>state==='play'&&!hold;
+const canDrive=()=>state==='play'&&!hold&&!(S.cineT!=null&&!S.cineDone);
 function capturePointer(el,id){el.setPointerCapture(id);capturedPointers.set(id,el);}
 function forgetPointer(el,id){if(capturedPointers.get(id)===el)capturedPointers.delete(id);}
 function applyHeldInputs(){
@@ -1673,7 +1790,7 @@ addEventListener('keydown',e=>{
   if(state==='play'){
     if(k==='Escape'){if(!e.repeat)openMenu();e.preventDefault();return;}
     if(k==='p'){if(!e.repeat)togglePause();e.preventDefault();return;}
-    if(hold)return;
+    if(hold||S.cineT!=null&&!S.cineDone)return;
     let used=true;
     // left hand: port engine and thruster; right hand: starboard engine and rudder
     if(k==='w'||k==='s'||k==='ArrowUp'||k==='ArrowDown'||k==='ArrowLeft'||k==='ArrowRight'){if(!e.repeat||held[k])held[k]=1;}
@@ -1705,7 +1822,8 @@ function currentModal(){return !$('help').hidden?$('help'):!$('menu').hidden?$('
 const modalItems=modal=>[...modal.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex="0"]')].filter(el=>!el.closest('[hidden],[inert]')&&el.getClientRects().length);
 function refreshModalState(preferred){
   const modal=currentModal();
-  for(const el of [hudEl,$('dock'),$('gLines'),$('result'),glc])el.inert=!!modal;
+  const cinematic=S&&S.cineT!=null&&!S.cineDone;
+  for(const el of [hudEl,$('dock'),$('gLines'),$('result'),glc])el.inert=!!modal||!!(cinematic&&el!==hudEl&&el!==$('result'));
   $('menu').inert=modal===$('help');
   if(modal){
     if(modal!==modalFocus||!modal.contains(document.activeElement)||preferred){
@@ -1771,25 +1889,39 @@ function jumpStage(k){
   const pv=stops[k-1].slip;S.stage=k;setStop(k);S.x=pv.x;S.y=pv.y;S.psi=pv.h;S.u=S.v=S.r=0;S.legT0=S.t;cam.x=S.x;cam.y=S.y;mooredStart();
   toast(stops[k-1].done+' · next: '+stops[k].name+' · let go and follow the arrow',3200);
 }
-/* play count: a free public counter (abacus.jasoncameron.dev), one count per visit on the live site; hidden if it cannot be reached */
-const PLAYS_URL='https://abacus.jasoncameron.dev/',PLAYS_KEY='sternto-dock-sim/plays';let playsCounted=false,displayedPlays=-1;
+/* Shared public total: one count per successful new game; reads never increment. */
+const PLAYS_URL='https://abacus.jasoncameron.dev/',PLAYS_KEY='sternto-dock-sim/plays';let displayedPlays=-1,playsReadPending=null,playsLastRead=-Infinity;
 function showPlays(n){
   if(!Number.isSafeInteger(n)||n<0||n<displayedPlays)return;displayedPlays=n;
-  $('playsN').textContent=n>=1e4?(n/1e3).toFixed(n>=1e5?0:1)+'k':n.toLocaleString('en-AU');$('plays').hidden=false;
+  $('playsN').textContent=n.toLocaleString('en-AU');$('plays').hidden=false;
   invalidateFrame();
 }
-async function plays(op){
-  if(location.origin!=='https://fourstripes.github.io'||!/^\/stern-to\/(?:index\.html)?$/.test(location.pathname))return;
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),6000);
-  try{const response=await fetch(PLAYS_URL+op+'/'+PLAYS_KEY,{cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});if(response.ok){const data=await response.json();showPlays(data.value);}}
-  catch{}finally{clearTimeout(timeout);}
+function plays(op){
+  if(location.origin!=='https://fourstripes.github.io'||!/^\/stern-to\/(?:index\.html)?$/.test(location.pathname)||!['get','hit'].includes(op))return;
+  if(op==='get'){
+    if(playsReadPending)return playsReadPending;
+    if(performance.now()-playsLastRead<5000)return;
+    playsLastRead=performance.now();
+  }
+  if(displayedPlays<0&&!$('playsN').textContent){$('playsN').textContent='Loading…';$('plays').hidden=false;}
+  const request=(async()=>{
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
+    try{
+      const response=await fetch(PLAYS_URL+op+'/'+PLAYS_KEY,{cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});
+      if(!response.ok)throw new Error('Counter unavailable');
+      const data=await response.json();if(!Number.isSafeInteger(data.value)||data.value<0)throw new Error('Invalid counter value');showPlays(data.value);
+    }catch{if(displayedPlays<0){$('playsN').textContent='Unavailable';$('plays').hidden=false;invalidateFrame();}}
+    finally{clearTimeout(timeout);}
+  })();
+  if(op==='get'){playsReadPending=request;request.finally(()=>{playsReadPending=null;});}
+  return request;
 }
 plays('get');
 function start(){
-  if(!playsCounted){playsCounted=true;plays('hit');}releaseControls();paused=false;
+  releaseControls();paused=false;
   camOff.x=camOff.y=0;$('menu').hidden=true;$('help').hidden=true;$('result').hidden=true;
   reset();state='play';acc=0;setPaused(false,false);refreshModalState(glc);
-  toast(LV.sub,3200);if(stops&&missionStart>0)jumpStage(missionStart);syncWakeLock();invalidateFrame();
+  toast(LV.sub,3200);if(stops&&missionStart>0)jumpStage(missionStart);syncWakeLock();invalidateFrame();plays('hit');
 }
 let paused=false,hold=false;
 function setPaused(value,announce=true){
@@ -1800,13 +1932,20 @@ function togglePause(){if(state==='play')setPaused(!hold);}
 function openMenu(){
   if(state==='play'){paused=true;menuReturnFocus=document.activeElement;}releaseControls();state='menu';
   $('result').hidden=true;$('help').hidden=true;$('menu').hidden=false;$('resume').hidden=!paused;$('go').classList.toggle('hot',!paused);
-  refreshModalState();syncWakeLock();invalidateFrame();
+  refreshModalState();syncWakeLock();invalidateFrame();plays('get');
 }
 function resume(){if(!paused)return;releaseControls();paused=false;state='play';resetFrameClock();$('menu').hidden=true;$('help').hidden=true;refreshModalState();syncWakeLock();invalidateFrame();}
 function setSide(left){$('dock').classList.toggle('left',left);app.classList.toggle('dl',left);try{localStorage.setItem('sternto-dock',left?'l':'r');}catch(e){}}
 $('rKeep').onclick=()=>{
   if(banner==='won')startDepart(false);
-  else{if(banner==='dep'){S.mode='arrive';S.done=false;S.legT0=S.t;S.legHits0=S.hits;toast('Bring her back onto the berth',2400);}$('result').hidden=true;}
+  else{
+    if(banner==='dep'){S.mode='arrive';S.done=false;S.legT0=S.t;S.legHits0=S.hits;toast('Bring her back onto the berth',2400);}
+    if(banner==='mission'){
+      const view=S.cineView;if(view){({pitch,zoomMul,rotv,topDown,chase}=view);camOff.x=view.x;camOff.y=view.y;}
+      S.cineT=null;refreshModalState(glc);
+    }
+    $('result').hidden=true;invalidateFrame();
+  }
 };
 $('helpBtn').onclick=openHelp;$('helpClose').onclick=closeHelp;
 $('go').onclick=start;$('resume').onclick=resume;$('pauseBtn').onclick=togglePause;

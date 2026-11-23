@@ -8,6 +8,7 @@ function fixture(t,options={}){
   return h;
 }
 const play=h=>h.click('go');
+const settleCounter=async h=>{await h.flush();await new Promise(resolve=>setImmediate(resolve));};
 
 test('keyboard engine slider changes its own engine without triggering starboard shortcuts',t=>{
   const h=fixture(t);play(h);
@@ -102,17 +103,74 @@ test('preview origins and nonproduction paths never touch the public play counte
   const other=fixture(t,{url:'https://fourstripes.github.io/stern-to/preview/'});play(other);assert.equal(other.fetchCalls.length,0);
 });
 
-test('live counter counts once per visit and ignores older responses',async t=>{
-  const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:async()=>({ok:true,json:async()=>({value:10})})});
-  play(h);h.run('start()');await h.flush();
-  assert.equal(h.fetchCalls.length,2);assert.match(h.fetchCalls[0][0],/\/get\//);assert.match(h.fetchCalls[1][0],/\/hit\//);
-  assert.equal(h.fetchCalls[0][1].credentials,'omit');assert.equal(h.fetchCalls[0][1].referrerPolicy,'no-referrer');
-  h.run('showPlays(20);showPlays(12)');assert.equal(h.element('playsN').textContent,'20');
+test('separate public browsers share one exact total and menu refresh observes other players',async t=>{
+  let total=11990;
+  const backend=async url=>{if(url.includes('/hit/'))total++;const value=total;return{ok:true,json:async()=>({value})};};
+  const first=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:backend});
+  const second=fixture(t,{url:'https://fourstripes.github.io/stern-to/index.html',fetch:backend});
+  await settleCounter(first);await settleCounter(second);assert.equal(first.element('playsN').textContent,'11,990');assert.equal(second.element('playsN').textContent,'11,990');
+  play(first);play(second);await settleCounter(first);await settleCounter(second);assert.equal(total,11992);
+  first.frame(5100);first.click('menuBtn');await settleCounter(first);
+  assert.equal(first.element('playsN').textContent,'11,992');assert.equal(second.element('playsN').textContent,'11,992');
+  assert.match(first.element('plays').textContent,/Total games played/);assert.match(first.element(first.element('plays').getAttribute('aria-describedby')).textContent,/all players/);
+  for(const h of [first,second])for(const [url,options] of h.fetchCalls){assert.match(url,/\/sternto-dock-sim\/plays$/);assert.equal(options.credentials,'omit');assert.equal(options.referrerPolicy,'no-referrer');assert.equal(options.cache,'no-store');}
+});
+
+test('new games, keyboard restarts and retries count; resume, help and voyage legs do not',async t=>{
+  let total=10;
+  const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:async url=>{if(url.includes('/hit/'))total++;return{ok:true,json:async()=>({value:total})};}});
+  const hits=()=>h.fetchCalls.filter(([url])=>url.includes('/hit/')).length;
+  await settleCounter(h);assert.equal(hits(),0);play(h);assert.equal(hits(),1);
+  h.click('pauseBtn');h.click('pauseBtn');h.click('menuBtn');h.click('helpBtn');h.click('helpClose');h.click('resume');assert.equal(hits(),1);
+  h.key('keydown','r',{target:'gl'});h.key('keydown','r',{target:'gl',repeat:true});assert.equal(hits(),2);
+  h.run('finish(false)');h.click('rRetry');assert.equal(hits(),3);
+  h.run('startDepart(true);passage();advancePassage(1)');assert.equal(hits(),3);
+  h.click('menuBtn');play(h);await settleCounter(h);assert.equal(hits(),4);assert.equal(h.element('playsN').textContent,'14');
+});
+
+test('a start that fails during setup never increments the shared total',t=>{
+  const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/'});
+  h.run('const originalReset=reset;reset=()=>{throw new Error("Setup failed");};try{start();}catch{}finally{reset=originalReset;}');
+  assert.equal(h.fetchCalls.filter(([url])=>url.includes('/hit/')).length,0);
+});
+
+test('menu total reads deduplicate in flight and observe the read cooldown',async t=>{
+  const pending=[];
+  const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:()=>new Promise(resolve=>pending.push(resolve))});
+  h.click('menuBtn');h.run('plays("get");plays("get")');assert.equal(h.fetchCalls.length,1);
+  pending.shift()({ok:true,json:async()=>({value:500})});await settleCounter(h);
+  h.click('menuBtn');assert.equal(h.fetchCalls.length,1);
+  h.frame(5100);h.click('menuBtn');h.click('menuBtn');assert.equal(h.fetchCalls.length,2);
+  pending.shift()({ok:true,json:async()=>({value:503})});await settleCounter(h);assert.equal(h.element('playsN').textContent,'503');
+});
+
+test('out-of-order reads and start responses cannot replace a newer shared total',async t=>{
+  const pending=[];
+  const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:()=>new Promise(resolve=>pending.push(resolve))});
+  play(h);h.run('start()');assert.equal(h.fetchCalls.length,3);
+  pending[2]({ok:true,json:async()=>({value:22})});await settleCounter(h);assert.equal(h.element('playsN').textContent,'22');
+  pending[1]({ok:true,json:async()=>({value:21})});pending[0]({ok:true,json:async()=>({value:20})});await settleCounter(h);assert.equal(h.element('playsN').textContent,'22');
+});
+
+test('failed or malformed counter responses show Unavailable without inventing a total or retrying hits',async t=>{
+  for(const fetch of [async()=>({ok:false,status:503}),async()=>({ok:true,json:async()=>({value:'not a count'})}),async()=>{throw new Error('Network unavailable');}]){
+    const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch});await settleCounter(h);
+    assert.equal(h.element('plays').hidden,false);assert.equal(h.element('playsN').textContent,'Unavailable');
+    play(h);await settleCounter(h);assert.equal(h.read('state'),'play');assert.equal(h.element('playsN').textContent,'Unavailable');assert.equal(h.fetchCalls.filter(([url])=>url.includes('/hit/')).length,1);assert.deepEqual(h.errors,[]);
+  }
+});
+
+test('a failed increment preserves the last confirmed total and is never retried automatically',async t=>{
+  const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:async url=>{if(url.includes('/hit/'))throw new Error('Response lost');return{ok:true,json:async()=>({value:321})};}});
+  await settleCounter(h);play(h);await settleCounter(h);h.frame(15100);await settleCounter(h);
+  assert.equal(h.element('playsN').textContent,'321');assert.equal(h.fetchCalls.filter(([url])=>url.includes('/hit/')).length,1);assert.deepEqual(h.errors,[]);
 });
 
 test('public counter aborts an unresponsive request without affecting the game',async t=>{
   const h=fixture(t,{url:'https://fourstripes.github.io/stern-to/',fetch:(_url,{signal})=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('Aborted'))))});
-  h.advance(6100);await h.flush();assert.equal(h.fetchCalls[0][1].signal.aborted,true);assert.deepEqual(h.errors,[]);assert.equal(h.read('state'),'menu');
+  h.frame(11100);assert.equal(h.fetchCalls[0][1].signal.aborted,false);
+  h.advance(4100);await settleCounter(h);assert.equal(h.fetchCalls[0][1].signal.aborted,true);assert.deepEqual(h.errors,[]);assert.equal(h.read('state'),'menu');
+  assert.equal(h.element('plays').hidden,false);assert.equal(h.element('playsN').textContent,'Unavailable');
 });
 
 test('wake lock is deduplicated and released on pause',async t=>{

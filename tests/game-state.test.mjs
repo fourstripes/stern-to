@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import * as physics from '../src/physics.js';
+import * as navigation from '../src/navigation.js';
+import * as water from '../src/water.js';
 
 const source = readFileSync(new URL('../src/game.js', import.meta.url), 'utf8');
 
@@ -39,16 +42,20 @@ function game() {
   const math = Object.create(Math);
   math.random = () => .5;
   const context = vm.createContext({
+    ...physics, ...navigation, ...water,
     Math: math, Set, Map, console, $: element, clearTimeout() {},
     toast() {}, spawn() {}, spray() {}, wakeDrop() {},
     build3D() {}, buildSlipMarker() {}, resetVisuals() {},
     releaseControls() {}, releaseMooringInputs() {}, setMooringSection() {}, updateMooringUI() {}, resetFrameClock() {}, condLabels() {},
+    advanceMissionEnvironment() {}, advanceDeckWork() {}, setWaves() {}, updateNavigation() {},
     finish() {}, startNight() {}, shelter: () => 1
   });
   vm.runInContext(`
     const KN=1.94384,D2R=Math.PI/180,TAU=Math.PI*2;
     const sgn=Math.sign,clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rnd=(a,b)=>(a+b)/2;
     ${between('/* ---------- ship ---------- */', '/* ---------- state ---------- */')}
+    const WV=buildWaves(env);
+    function setWaves(){buildWaves(env,WV);}
     let S,state='menu',T=0,parts=[],toastT=0,banner='',paused=false;
     let nightEnv0=null,physGood=null,physWarned=false;
     const KW={on:false,d:[1,0],pos:0,A:0,c:11},U={uNight:{value:0}};
