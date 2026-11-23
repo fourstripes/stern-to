@@ -398,6 +398,12 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
 @media (max-width:360px){.hud{gap:5px;padding-left:max(6px,env(safe-area-inset-left,0px));padding-right:max(6px,env(safe-area-inset-right,0px))}.dmg{display:none}.inst{gap:5px}.inst dd{font-size:12px}
   .nav{padding:1px 5px 1px 1px;gap:3px}.nav svg{width:16px;height:16px}.hud #pauseBtn,.hud #menuBtn{padding:1px 4px;font-size:9.5px;letter-spacing:.02em}}
 @media (max-width:380px){.trio{gap:4px}.trio .btn{font-size:10px;letter-spacing:0;padding:1px}.dock .trio .btn.big{font-size:13px;letter-spacing:.03em}}
+/* public play count, top right */
+.plays{order:3;margin-left:auto;flex:none;display:flex;align-items:center;gap:4px;font-family:var(--display);font-size:10.5px;font-weight:600;letter-spacing:.06em;color:rgba(232,240,244,.55);white-space:nowrap;pointer-events:none}
+.plays[hidden]{display:none}.plays b{font-weight:600;color:rgba(232,240,244,.8)}.plays svg{opacity:.7}
+.plays:not([hidden])~.nav{margin-left:2px}
+@media (max-width:480px){.plays .pl{display:none}}
+@media (max-width:360px){.plays{display:none!important}}
 /* toasts sit small and quiet under the top bar */
 #toast{top:calc(var(--top,31px) + 6px);bottom:auto;left:max(12px,env(safe-area-inset-left,0px));transform:none;max-width:min(320px,calc(100% - 160px));text-align:left;font-size:10.5px;letter-spacing:.07em;line-height:1.35;padding:4px 9px;border-radius:4px;background:rgba(6,20,30,.74);border-color:rgba(255,255,255,.1);transition:opacity .4s}
 #toast.r{left:auto;right:max(12px,env(safe-area-inset-right,0px));text-align:right}
@@ -411,7 +417,7 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
   <div id="ptr" hidden></div>
 
   <header class="hud">
-    <div class="berth"><span id="bName">Fuel quay</span><span class="t" id="bTime">0:00</span><span class="dmgl">Hull</span><div class="dmg"><i id="dmgBar"></i></div><button class="btn" id="pauseBtn">Pause</button><button class="btn" id="menuBtn">Menu</button><span class="nav" title="Where to go next"><svg id="navA" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".45"/><path d="M12 3.5l5.5 13.5-5.5-3.2-5.5 3.2z" fill="currentColor"/></svg><b id="navL">Berth</b><span id="navD">0 m</span></span></div>
+    <div class="berth"><span id="bName">Fuel quay</span><span class="t" id="bTime">0:00</span><span class="dmgl">Hull</span><div class="dmg"><i id="dmgBar"></i></div><button class="btn" id="pauseBtn">Pause</button><button class="btn" id="menuBtn">Menu</button><span class="plays" id="plays" hidden title="Games played"><svg viewBox="0 0 10 10" width="8" height="8" aria-hidden="true"><path d="M2 1l7 4-7 4z" fill="currentColor"/></svg><b id="playsN"></b><span class="pl"> plays</span></span><span class="nav" title="Where to go next"><svg id="navA" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".45"/><path d="M12 3.5l5.5 13.5-5.5-3.2-5.5 3.2z" fill="currentColor"/></svg><b id="navL">Berth</b><span id="navD">0 m</span></span></div>
     <dl class="inst">
       <div><dt>Speed</dt><dd id="iSpd">0.0<small>kn</small></dd></div>
       <div><dt>Bow</dt><dd id="iBow">0.0</dd></div>
@@ -2013,7 +2019,12 @@ function jumpStage(k){
   const pv=stops[k-1].slip;S.stage=k;setStop(k);S.x=pv.x;S.y=pv.y;S.psi=pv.h;S.u=S.v=S.r=0;S.legT0=S.t;cam.x=S.x;cam.y=S.y;mooredStart();
   toast(stops[k-1].done+' · next: '+stops[k].name+' · let go and follow the arrow',3200);
 }
-function start(){paused=false;if(hold)togglePause();hold=false;try{navigator.wakeLock&&navigator.wakeLock.request('screen').catch(()=>{});}catch(e){}camOff.x=camOff.y=0;$('menu').hidden=true;$('result').hidden=true;reset();state='play';acc=0;toast(LV.sub,3200);if(stops&&missionStart>0)jumpStage(missionStart);}
+/* play count: a free public counter (abacus.jasoncameron.dev), one count per visit on the live site; hidden if it cannot be reached */
+const PLAYS_URL='https://abacus.jasoncameron.dev/',PLAYS_KEY='sternto-dock-sim/plays';let playsCounted=false;
+function showPlays(n){if(typeof n!=='number'||!isFinite(n))return;$('playsN').textContent=n>=1e4?(n/1e3).toFixed(n>=1e5?0:1)+'k':n.toLocaleString('en');$('plays').hidden=false;}
+function plays(op){if(location.protocol!=='https:')return;try{fetch(PLAYS_URL+op+'/'+PLAYS_KEY,{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{if(j)showPlays(j.value);}).catch(()=>{});}catch(e){}}
+plays('get');
+function start(){if(!playsCounted){playsCounted=true;plays('hit');}paused=false;if(hold)togglePause();hold=false;try{navigator.wakeLock&&navigator.wakeLock.request('screen').catch(()=>{});}catch(e){}camOff.x=camOff.y=0;$('menu').hidden=true;$('result').hidden=true;reset();state='play';acc=0;toast(LV.sub,3200);if(stops&&missionStart>0)jumpStage(missionStart);}
 let paused=false,hold=false;
 function togglePause(){if(state!=='play')return;hold=!hold;const b=$('pauseBtn');b.textContent=hold?'Play':'Pause';b.classList.toggle('on',hold);toast(hold?'Paused':'Under way',hold?1e9:900);}
 function openMenu(){if(state==='play')paused=true;state='menu';$('result').hidden=true;$('help').hidden=true;$('menu').hidden=false;$('resume').hidden=!paused;$('go').classList.toggle('hot',!paused);}
