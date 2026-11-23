@@ -1934,32 +1934,50 @@ function jumpStage(k){
   toast(stops[k-1].done+' · next: '+stops[k].name+' · let go and follow the arrow',3200);
 }
 /* Shared public total: one count per successful new game; reads never increment. */
-const PLAYS_URL='https://abacus.jasoncameron.dev/',PLAYS_KEY='sternto-dock-sim/plays';let displayedPlays=-1,playsReadPending=null,playsLastRead=-Infinity;
-function showPlays(n){
-  if(!Number.isSafeInteger(n)||n<0||n<displayedPlays)return;displayedPlays=n;
-  $('playsN').textContent=n.toLocaleString('en-AU');$('plays').hidden=false;
-  invalidateFrame();
+const PLAYS_URL='https://abacus.jasoncameron.dev/',PLAYS_KEY='sternto-dock-sim/plays';let displayedPlays=-1,playsReadPending=null,playsLastRead=-Infinity,playsRevision=0;
+function playsStatus(text='',retry=false){
+  const note=$('playsState');note.textContent=text;note.hidden=!text;$('playsRetry').hidden=!retry;invalidateFrame();
 }
-function plays(op){
+function showPlays(n){
+  if(!Number.isSafeInteger(n)||n<0||n<displayedPlays)return;displayedPlays=n;playsRevision++;
+  $('playsN').textContent=n.toLocaleString('en-AU');$('plays').hidden=false;
+  playsStatus();
+}
+function plays(op,force=false){
   if(location.origin!=='https://fourstripes.github.io'||!/^\/stern-to\/(?:index\.html)?$/.test(location.pathname)||!['get','hit'].includes(op))return;
   if(op==='get'){
     if(playsReadPending)return playsReadPending;
-    if(performance.now()-playsLastRead<5000)return;
+    if(!force&&performance.now()-playsLastRead<5000)return;
     playsLastRead=performance.now();
+    if(displayedPlays<0){$('playsN').textContent='Loading…';playsStatus();}
+    $('playsRetry').hidden=true;$('plays').hidden=false;
   }
-  if(displayedPlays<0&&!$('playsN').textContent){$('playsN').textContent='Loading…';$('plays').hidden=false;}
+  const revision=playsRevision;
   const request=(async()=>{
-    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
-    try{
-      const response=await fetch(PLAYS_URL+op+'/'+PLAYS_KEY,{cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});
-      if(!response.ok)throw new Error('Counter unavailable');
-      const data=await response.json();if(!Number.isSafeInteger(data.value)||data.value<0)throw new Error('Invalid counter value');showPlays(data.value);
-    }catch{if(displayedPlays<0){$('playsN').textContent='Unavailable';$('plays').hidden=false;invalidateFrame();}}
-    finally{clearTimeout(timeout);}
+    for(let attempt=0;attempt<(op==='get'?2:1);attempt++){
+      if(op==='get')playsLastRead=performance.now();
+      const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);
+      try{
+        const response=await fetch(PLAYS_URL+op+'/'+PLAYS_KEY,{cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});
+        if(!response.ok)throw new Error('Counter unavailable');
+        const data=await response.json();if(!Number.isSafeInteger(data.value)||data.value<0)throw new Error('Invalid counter value');showPlays(data.value);return;
+      }catch{}finally{clearTimeout(timeout);}
+      // A newer successful response owns the display; never replay an ambiguous increment.
+      if(playsRevision!==revision)return;
+      if(op==='get'&&attempt===0){
+        playsStatus('Retrying…');await new Promise(resolve=>setTimeout(resolve,3000));
+        if(playsRevision!==revision)return;
+      }else if(op==='get'||!playsReadPending){
+        if(displayedPlays<0)$('playsN').textContent='Unavailable';
+        $('plays').hidden=false;playsStatus(displayedPlays<0?'':'Last known',true);
+      }
+    }
   })();
   if(op==='get'){playsReadPending=request;request.finally(()=>{playsReadPending=null;});}
   return request;
 }
+$('playsRetry').onclick=()=>plays('get',true);
+addEventListener('online',()=>{if(!$('menu').hidden)plays('get',true);});
 plays('get');
 function start(){
   releaseControls();paused=false;

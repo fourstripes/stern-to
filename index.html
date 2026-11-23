@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="modulepreload" href="vendor/three.module.min.js">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="assets/game.css?v=20261123-anchors">
+<link rel="stylesheet" href="assets/game.css?v=20261123-counter">
 </head>
 <body>
 <section id="startup" class="startup" role="status" aria-live="polite" aria-atomic="true">
@@ -106,6 +106,7 @@
 
   <div class="sheet" id="menu" role="dialog" aria-modal="true" aria-labelledby="menuTitle" tabindex="-1">
     <div class="card">
+      <p class="plays" id="plays" role="status" aria-describedby="playsHelp" hidden><span>Total games played</span><span class="plays-value"><b id="playsN"></b><small id="playsState" hidden></small></span><button type="button" class="btn" id="playsRetry" aria-label="Retry loading total games played" hidden>Retry</button><span id="playsHelp" hidden>Shared total across all players on the public game.</span></p>
       <div class="hd"><h1 id="menuTitle">Stern<span>-</span>To</h1><div class="eyebrow" id="spec">50 m · 500 t · twin screw · bow thruster</div></div>
       <div class="shipsel" id="shipSel"></div>
       <div class="berths" id="berths"></div>
@@ -117,7 +118,6 @@
       </div>
       
       <div class="acts"><button class="btn hot go" id="resume" hidden>Resume</button><button class="btn hot go" id="go">Cast off</button><button class="btn go" id="helpBtn">Controls &amp; rules</button></div>
-      <p class="plays" id="plays" role="status" aria-describedby="playsHelp" hidden><span>Total games played</span><b id="playsN"></b><span id="playsHelp" hidden>Shared total across all players on the public game.</span></p>
     </div>
   </div>
 
@@ -178,7 +178,7 @@
   </div>
 </div>
 
-<script type="module" src="src/main.js?v=20261123-anchors"></script>
+<script type="module" src="src/main.js?v=20261123-counter"></script>
 
 
 </body>

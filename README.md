@@ -73,7 +73,7 @@ Drop inside the marked circle, use + to reach at least the displayed target, rel
 
 The menu shows one shared total across all players on the public GitHub Pages game. The existing server-side counter and its history are retained. Each successfully started game adds one, including a new Cast off, restart or retry. Page loads, menu visits, pause/resume and continuing a voyage do not add plays. This counts games, so one person can contribute more than one game.
 
-The total refreshes when the menu opens, with a short cooldown and duplicate-read protection. Local development and preview URLs never contact the public counter. If the service cannot be reached, the menu shows an unavailable state or retains its last confirmed total; it does not invent a local total or silently reset the shared count.
+The total sits at the top of the menu and refreshes when the menu opens, with a short cooldown and duplicate-read protection. Slow requests have up to 30 seconds to finish without blocking play. A failed read retries once; Retry and reconnection can request another read. Failed increments are never retried, because the service may already have counted them. Local development and preview URLs never contact the public counter. If the service cannot be reached, the menu shows an unavailable state or labels its last confirmed total as Last known; it does not invent a local total or silently reset the shared count.
 
 ## Development checks
 
@@ -103,6 +103,6 @@ The vendor script selects the `T3.*` exports used in the game, preserves the MIT
 
 ## External requests and saved preferences
 
-The game engine loads from the same origin. Google Fonts is optional and falls back to system fonts. The shared public play counter runs only at `https://fourstripes.github.io/stern-to/` or its `index.html` URL, times out after fifteen seconds and cannot block play. Local development and preview origins do not increment it.
+The game engine loads from the same origin. Google Fonts is optional and falls back to system fonts. The shared public play counter runs only at `https://fourstripes.github.io/stern-to/` or its `index.html` URL, gives each request up to thirty seconds and cannot block play. Local development and preview origins do not increment it.
 
 Panel placement, mirroring mode and best scores use local storage. Storage failure is tolerated. Best scores still share the existing berth-based key across vessels and weather settings.

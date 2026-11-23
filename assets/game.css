@@ -257,7 +257,7 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
   .inst dt{display:none}
 }
 /* main menu: short, and laid out to suit the screen */
-#menu .card{max-width:520px;display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "ship" "berths" "mstart" "conds" "acts" "plays";gap:12px;padding:16px}
+#menu .card{max-width:520px;display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"plays" "head" "ship" "berths" "mstart" "conds" "acts";gap:12px;padding:16px}
 #menu .hd{grid-area:head;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px}
 #menu h1{font-size:36px}
 #menu .shipsel{grid-area:ship}#menu .berths{grid-area:berths;grid-template-columns:1fr 1fr}#menu .conds{grid-area:conds}#menu .acts{grid-area:acts}
@@ -267,7 +267,7 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
 #menu .acts .btn{flex:1 1 90px}
 #menu .go{font-size:16px;padding:10px}
 @media (orientation:landscape) and (max-height:560px){
-  #menu .card{max-width:760px;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);grid-template-areas:"head berths" "ship berths" "ship mstart" "acts conds" "plays plays";align-items:start;gap:10px 16px;padding:14px}
+  #menu .card{max-width:760px;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);grid-template-areas:"plays plays" "head berths" "ship berths" "ship mstart" "acts conds";align-items:start;gap:10px 16px;padding:14px}
   #menu h1{font-size:30px}
   #menu .acts{align-self:end}
 }
@@ -387,8 +387,11 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
   .nav{padding:1px 5px 1px 1px;gap:3px}.nav svg{width:16px;height:16px}.hud #pauseBtn,.hud #menuBtn{padding:1px 4px;font-size:9.5px;letter-spacing:.02em}}
 @media (max-width:380px){.trio{gap:4px}.trio .btn{font-size:10px;letter-spacing:0;padding:1px}.dock .trio .btn.big{font-size:13px;letter-spacing:.03em}}
 /* The public play count belongs in the start menu, away from navigation. */
-#menu .plays{grid-area:plays;display:flex;justify-content:center;align-items:center;gap:5px;margin:0;font-family:var(--display);font-size:12px;letter-spacing:.06em;color:var(--dim);white-space:nowrap}
+#menu .plays{grid-area:plays;display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0;padding:0 0 8px;border-bottom:1px solid var(--line);font-family:var(--display);font-size:12px;letter-spacing:.06em;color:var(--dim);white-space:nowrap}
 .plays b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.plays-value{display:flex;flex-direction:column;align-items:flex-end;gap:1px;margin-left:auto}
+#playsState{font-size:10px;letter-spacing:.02em}
+#menu #playsRetry{min-width:44px;min-height:44px;padding:3px 6px;font-size:11px;letter-spacing:.02em;touch-action:manipulation}
 /* toasts sit small and quiet under the top bar */
 #toast{top:calc(var(--top,31px) + 6px);bottom:auto;left:max(12px,env(safe-area-inset-left,0px));right:auto;transform:none;z-index:3;max-width:min(320px,max(0px,calc(100% - var(--mooring-width) - var(--panel-left) - var(--panel-right) - 12px)));text-align:left;font-size:10.5px;letter-spacing:.07em;line-height:1.35;padding:4px 9px;border-radius:4px;background:rgba(6,20,30,.74);border-color:rgba(255,255,255,.1);transition:opacity .4s;overflow-wrap:anywhere}
 #app:has(#gLines.c-tl,#gLines.c-bl) #toast{left:auto;right:max(12px,env(safe-area-inset-right,0px));text-align:right}
