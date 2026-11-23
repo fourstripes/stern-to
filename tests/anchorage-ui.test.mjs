@@ -17,7 +17,9 @@ test('the final goal shows exact required chain and never rounds short scope up 
   h.run('S.anchors[0].L0=17.99;updateMooringUI();');
   assert.equal(h.element('anchorGoal').hidden,false);
   assert.equal(h.element('anchorNeed').textContent,'18');
-  assert.equal(h.element('anchorPaid').textContent,'17.9');
+  assert.equal(h.element('anchorProgress').getAttribute('aria-valuenow'),'17.9');
+  assert.equal(h.element('anchorChain').textContent,'17.9');
+  assert.equal(h.element('anchorGoal').parentElement,h.element('anchorBody'));
   assert.match(h.element('anchorHint').textContent,/Pay out 18 m/);
   assert.equal(h.element('anchorGoal').classList.contains('ready'),false);
   h.run('S.anchors[0].L0=18;S.anchors[0].held=false;updateMooringUI();');
@@ -49,6 +51,17 @@ test('meeting the anchorage goal completes the mission, pans and zooms, then per
   assert.equal(h.run('canDrive()'),true);
   assert.equal(h.element('result').hidden,true);
   assert.deepEqual(h.errors.map(String),[]);
+});
+
+test('the final goal follows a qualifying anchor even when another side or Both is selected',t=>{
+  const h=anchorage(t);
+  h.run('S.anchors.push({...S.anchors[0],side:1,L0:3});S.anchSel=1;updateMooringUI();');
+  assert.equal(h.element('anchorChain').textContent,'3.0');
+  assert.equal(h.element('anchorProgress').getAttribute('aria-valuenow'),'18');
+  assert.equal(h.element('anchorGoal').classList.contains('ready'),true);
+  h.run('S.anchSel=2;updateMooringUI();');
+  assert.equal(h.element('anchorChain').textContent,'P18.0\nS3.0');
+  h.advance(3150);assert.equal(h.run('S.done'),true);
 });
 
 test('reduced motion completes the anchorage without an automatic camera move',t=>{

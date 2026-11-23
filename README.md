@@ -45,8 +45,8 @@ The core simulation runs at 60 Hz. Vessel dynamics, water sampling and navigatio
 | Rudder / midships | Left / Right, C |
 | Engines to neutral | Space |
 | Mooring lines | 1–6 |
-| Heave / slack / let go | Hold H / J, G |
-| Anchor selection / action | Z / X |
+| Heave lines / slack lines / let lines go | Hold H / J, G |
+| Choose anchors / drop / bring in or stop | Z / X / B |
 | Fenders | F |
 | Top / chase camera | T / V |
 | Pause / menu / restart | P / Escape / R |
@@ -55,19 +55,19 @@ Pointer and touch controls mirror these actions. Each engine slider and the rudd
 
 Anchors, Lines and Fenders start collapsed. Tap a heading to show its controls, or tap it again to close them; only one section opens at a time. Closing a section leaves deployed equipment in place and stops its held hauling controls. Small status labels keep active equipment visible while the sections are closed. Fenders can be selected directly as stowed, port, starboard or both.
 
-Weigh retrieves the anchor over time. Hold chain pauses retrieval, and manual Heave or Slack takes over the selected anchor. All stop selects neutral; use astern thrust to brake the boat's momentum.
+The Anchors panel keeps its selector, Drop, Bring in and chain controls together. Choose Port, Starboard or Both; the tender has one Bow anchor. Drop lowers the selected missing anchors with 3 m of chain and holds automatically. Tap − or + for one metre, or hold to adjust continuously. Bring in retrieves the selected anchors over time and changes to Stop while retrieving. Both applies to both selected anchors; changing selection does not move or remove equipment. The Lines panel has its own separate actions. All stop selects neutral; use astern thrust to brake the boat's momentum.
 
 ## Mission navigation and the final anchorage
 
 The amber waypoint guides the boat around land to the next berth. Red and green lateral marks follow IALA region A: red to port and green to starboard on entry. East-cardinal cones point away from each other; safe passage is to their east. The game's harbour zones use a 6 kn advisory. The Controls & rules menu explains head-on, crossing and overtaking encounters. Traffic predicts close approaches, slows or alters course when needed, and checks nearby hulls and quays before moving.
 
-Shore service requires two actual fast shore lines. At the final anchorage, the on-screen objective shows actual chain paid out and the required amount:
+Shore service requires two actual fast shore lines. At the final anchorage, open Anchors to see the chain paid out, target and progress together:
 
 | Tender | Superyacht | Megayacht |
 | --- | --- | --- |
 | 13 m | 18 m | 27 m |
 
-Drop inside the marked circle, pay out at least the displayed amount, hold the chain, and settle for three seconds without dragging. There is no hidden backing-distance condition. Completing the goal starts a short pan and zoom before the mission result. Keep playing restores the previous camera. Reduced-motion mode shows the result without the automatic camera move.
+Drop inside the marked circle, use + to reach at least the displayed target, release the control and settle for three seconds without dragging. The chain holds automatically. One secure anchor can complete the goal even when Both is selected. There is no hidden backing-distance condition. Completing the goal starts a short pan and zoom before the mission result. Keep playing restores the previous camera. Reduced-motion mode shows the result without the automatic camera move.
 
 ## Total games played
 

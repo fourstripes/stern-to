@@ -116,19 +116,19 @@ for (const [id, limits] of Object.entries(handlingBounds)) {
 
 test('automatic Weigh reels in chain, can be held, and respects a manual slack override', t => {
   const h = fixture(t);
-  h.run(`S.anchors=[{side:-1,x:19.4,y:-2.4,L0:10,held:true,set:false}];aSel=-1;letGo();`);
+  h.run(`S.anchors=[{side:-1,x:19.4,y:-2.4,L0:10,held:true,set:false}];bringInAnchors();`);
   assert.equal(h.read('S.anchors.length'), 1);
   assert.equal(h.read('S.anchors[0].weighing'), true);
   h.run('step(1/60)');
   within(h.read('S.anchors[0].L0'), [9.98, 10], 'Chain retrieval rate');
-  h.run('letGo();step(1/60)');
+  h.run('bringInAnchors();step(1/60)');
   const held = h.read('S.anchors[0].L0');
   h.run('step(1/60)');
   assert.equal(h.read('S.anchors[0].L0'), held);
-  h.run('letGo();haul=-1;step(1/60)');
+  h.run('bringInAnchors();adjustAnchorChain(selectedAnchors(),-1);step(1/60)');
   assert.equal(h.read('S.anchors[0].weighing'), false);
   assert.ok(h.read('S.anchors[0].L0') > held);
-  h.run('haul=0;S.anchors[0].L0=2.01;letGo();step(1/60)');
+  h.run('S.anchors[0].L0=2.01;bringInAnchors();step(1/60)');
   assert.equal(h.read('S.anchors.length'), 0);
 });
 
@@ -138,10 +138,10 @@ test('weighing cannot teleport a distant anchor aboard and does not cancel anoth
   assert.equal(h.read('S.anchors.length'), 1);
   h.run(`
     S.anchors[0].x=S.x+19.4;S.anchors[0].y=S.y-2.4;
-    S.u=S.v=S.r=S.psi=0;haul=1;sel=0;aSel=null;
+    S.u=S.v=S.r=S.psi=0;sel=0;
     lines[0].state='fast';lines[0].L0=10;lines[0].bol={x:21,y:-8};
-    step(1/60);
   `);
+  h.run('setHeldInput("test:line",{kind:"haul",direction:1});step(1/60)');
   assert.equal(h.read('S.anchors.length'), 0);
   assert.equal(h.read('haul'), 1);
   assert.equal(h.read('sel'), 0);

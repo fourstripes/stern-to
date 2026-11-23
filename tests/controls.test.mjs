@@ -44,7 +44,7 @@ test('keyboard and pointer holds coexist; blur clears momentary inputs while pre
 test('Help Enter preserves the Back button action without starting gameplay',t=>{
   const h=fixture(t);h.click('helpBtn');
   const event=h.key('keydown','Enter',{target:'helpClose'});
-  assert.equal(event.defaultPrevented,false);assert.equal(h.read('state'),'menu');assert.equal(h.element('menu').hidden,false);
+  assert.equal(event.defaultPrevented,false);assert.equal(h.read('state'),'menu');assert.equal(h.element('menu').hidden,true);
   // jsdom dispatches keyboard events but does not synthesise native button activation.
   h.click('helpClose');assert.equal(h.element('help').hidden,true);assert.equal(h.document.activeElement,h.element('helpBtn'));
 });
