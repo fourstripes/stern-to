@@ -1,0 +1,4 @@
+# Preserve upstream whitespace inside the generated engine's shader strings.
+vendor/** linguist-vendored=true
+vendor/three.module.min.js -whitespace linguist-generated=true
+package-lock.json linguist-generated=true
