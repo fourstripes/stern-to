@@ -8,8 +8,7 @@ function fixture(t, ship='super') {
   h.click('anchorsT');assert.deepEqual(h.errors,[]);return h;
 }
 function select(h,value) {
-  h.element('anchSel').value=String(value);
-  h.element('anchSel').dispatchEvent(new h.window.Event('change',{bubbles:true}));
+  h.click('[data-anchor="'+value+'"]');
 }
 function rig(h,sides=[-1,1],lengths=[20,30]) {
   h.run(`S.anchors=${JSON.stringify(sides)}.map((side,i)=>{const [x,y]=hawseFor(side);return{side,x,y,L0:${JSON.stringify(lengths)}[i],held:true,set:false};});updateMooringUI();`);
@@ -93,7 +92,7 @@ test('Space and Enter chain controls support tap, repeat suppression and blur ca
   const event=h.key('keydown',' ',{target:'chOut'});assert.equal(event.defaultPrevented,true);
   h.key('keydown',' ',{target:'chOut',repeat:true});assert.deepEqual(lengths(h),[21,30]);
   h.key('keyup',' ',{target:'chOut'});ticks(h,60);assert.deepEqual(lengths(h),[21,30]);
-  h.key('keydown','Enter',{target:'chOut'});h.element('anchSel').focus();assert.equal(h.read('anchorHold'),null);
+  h.key('keydown','Enter',{target:'chOut'});h.element('[data-anchor="0"]').focus();assert.equal(h.read('anchorHold'),null);
   ticks(h,60);assert.deepEqual(lengths(h),[22,30]);
   h.key('keydown','Enter',{target:'chOut',repeat:true});assert.equal(h.read('anchorHold'),null);
 });
@@ -129,7 +128,10 @@ test('a selected stowed side never falls back to the other deployed anchor or to
 });
 
 test('tender has one Bow choice and its Drop, adjustment and retrieval use only the bow anchor',t=>{
-  const h=fixture(t,'tender');assert.deepEqual([...h.element('anchSel').options].map(o=>[o.value,o.text]),[['0','Bow']]);
+  const h=fixture(t,'tender'),choices=[...h.document.querySelectorAll('[data-anchor]')];
+  assert.deepEqual(choices.filter(b=>!b.hidden).map(b=>[b.dataset.anchor,b.querySelector('.equipment-label').textContent]),[['0','Bow']]);
+  assert.equal(h.element('anchorDiagram').dataset.mode,'bow');
+  assert.ok(choices.filter(b=>b.hidden).every(b=>b.disabled));
   h.key('keydown','z',{target:'gl'});h.key('keydown','x',{target:'gl'});h.run('S.bowX=23.2;advanceDeckWork(1/60)');
   assert.deepEqual(h.read('S.anchors.map(a=>[a.side,a.L0,a.held])'),[[0,3,true]]);
   h.click('chOut');assert.deepEqual(lengths(h),[4]);h.key('keydown','b',{target:'gl'});assert.equal(h.read('S.anchors[0].weighing'),true);
@@ -146,6 +148,26 @@ test('H, J and G always operate shore lines while anchor selection and retrieval
 
 test('switching equipment cards preserves anchor selection and gear until a new game',t=>{
   const h=fixture(t);rig(h);select(h,2);h.click('linesT');
-  h.click('anchorsT');assert.equal(h.element('anchSel').value,'2');assert.deepEqual(lengths(h),[20,30]);
+  h.click('anchorsT');assert.equal(h.element('[data-anchor="2"]').getAttribute('aria-pressed'),'true');assert.deepEqual(lengths(h),[20,30]);
   h.click('anchorsT');h.click('go');assert.equal(h.read('mooringSection'),null);assert.equal(h.read('S.anchors.length'),0);
+});
+
+test('anchor diagram keeps selection separate from actual dropping and retrieval on each side',t=>{
+  const h=fixture(t),port=h.element('[data-anchor="0"]'),starboard=h.element('[data-anchor="1"]');
+  select(h,1);assert.equal(h.read('S.anchors.length'),0);assert.equal(h.read('S.anchorCmd'),false);
+  assert.equal(port.getAttribute('aria-pressed'),'false');assert.equal(starboard.getAttribute('aria-pressed'),'true');
+  h.click('anchDrop');select(h,0);
+  assert.equal(starboard.classList.contains('working'),true);assert.match(starboard.getAttribute('aria-label'),/preparing/);
+  assert.equal(starboard.getAttribute('aria-pressed'),'false');assert.equal(port.classList.contains('deployed'),false);
+  h.run('S.bowX=23.2;advanceDeckWork(1/60)');
+  assert.equal(starboard.classList.contains('working'),false);assert.equal(starboard.classList.contains('deployed'),true);
+  assert.equal(starboard.querySelector('.equipment-state').textContent,'Out');
+  select(h,1);h.click('anchWeigh');assert.equal(starboard.classList.contains('working'),true);
+  assert.match(starboard.getAttribute('aria-label'),/bringing in/);select(h,2);
+  assert.equal(port.getAttribute('aria-pressed'),'true');assert.equal(starboard.getAttribute('aria-pressed'),'true');
+  assert.equal(port.classList.contains('deployed'),false);assert.equal(starboard.classList.contains('deployed'),true);
+  h.run("setShip('tender');updateMooringUI()");h.run("setShip('super');updateMooringUI()");
+  assert.equal(h.element('anchorDiagram').dataset.mode,'paired');
+  assert.ok([...h.document.querySelectorAll('[data-anchor]')].every(b=>!b.hidden&&!b.disabled));
+  assert.equal(port.querySelector('.equipment-label').textContent,'Port');assert.deepEqual(h.errors,[]);
 });

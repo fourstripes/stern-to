@@ -109,15 +109,30 @@ for(const loss of ['auto-releases beyond reach','parts under strain']){
   });
 }
 
-test('fender choices select exact sides while keyboard gear actions do not open any panel',t=>{
+test('fender diagram toggles individual sides and keeps Both and Stow as explicit commands',t=>{
   const h=fixture(t);h.click('fendersT');
-  for(const value of [3,1,2,0]){
-    h.click('[data-fender="'+value+'"]');assert.equal(h.read('S.fend'),value);
-    assert.deepEqual([...h.document.querySelectorAll('[data-fender]')].map(el=>el.getAttribute('aria-pressed')),['0','1','2','3'].map(key=>String(+key===value)));
+  for(const [button,mask] of [[1,1],[2,3],[1,2],[2,0],[3,3],[0,0]]){
+    h.click('[data-fender="'+button+'"]');assert.equal(h.read('S.fend'),mask);
+    for(const el of h.document.querySelectorAll('[data-fender]')){
+      const value=+el.dataset.fender;
+      assert.equal(el.getAttribute('aria-pressed'),String(value===1||value===2?!!(mask&value):mask===value));
+    }
   }
   h.click('fendersT');h.key('keydown','f',{target:'gl'});assert.equal(h.read('S.fend'),1);assert.equal(h.element('fendersStatus').textContent,'Port');
   h.key('keydown','x',{target:'gl'});assert.equal(h.read('S.anchorCmd'),true);h.run('updateMooringUI()');assert.equal(h.element('anchorsStatus').textContent,'Working');
   assert.equal(h.read('mooringSection'),null);for(const id of ['anchorBody','lnBody','fenderBody'])assert.equal(h.element(id).hidden,true);
+});
+
+test('fender diagram shows actual intact gear while crew rig or stow the requested side',t=>{
+  const h=fixture(t);h.click('fendersT');const port=h.element('[data-fender="1"]'),mark=port.querySelector('.equipment-state');
+  h.click(port);assert.equal(mark.textContent,'0/4');assert.equal(port.getAttribute('aria-pressed'),'true');
+  assert.equal(port.classList.contains('working'),true);assert.equal(port.classList.contains('deployed'),false);
+  h.run('S.fendN[0]=2.3;updateMooringUI()');assert.equal(mark.textContent,'2/4');assert.equal(port.classList.contains('deployed'),true);
+  h.run('S.fPop[0]=1;updateMooringUI()');assert.equal(mark.textContent,'1/4');
+  h.click(port);assert.equal(port.getAttribute('aria-pressed'),'false');assert.equal(mark.textContent,'1/4');
+  assert.match(port.getAttribute('aria-label'),/1 of 4 out, stowing/);assert.equal(port.classList.contains('deployed'),true);
+  h.run('S.fendN[0]=0;updateMooringUI()');assert.equal(mark.textContent,'In');assert.equal(port.classList.contains('deployed'),false);
+  assert.equal(port.classList.contains('working'),false);assert.deepEqual(h.errors,[]);
 });
 
 test('collapsing a section returns focus from its controls to a visible heading',t=>{
