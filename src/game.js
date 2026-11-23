@@ -817,6 +817,9 @@ function loft(rings,cap){
     T3.ShapeUtils.triangulateShape(top.map(v=>new T3.Vector2(v[0],v[2])),[]).forEach(f=>idx.push(o+f[0],o+f[1],o+f[2]));}
   const g=new T3.BufferGeometry();g.setAttribute('position',new T3.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();return g;
 }
+// The chain socket is on the pocket's outer face, shared with the stowed anchor eye.
+const HAWSE={x:19.2,y:2.05,z:2.12,yaw:.28,depth:.5,eye:.48};
+const anchorPocketGeometries=[-1,1].map(sd=>new T3.BoxGeometry(1.25,1.3,HAWSE.depth).rotateY(sd*HAWSE.yaw).translate(HAWSE.x,HAWSE.y,sd*HAWSE.z));
 // the yacht, built once at 50 x 9.4 m and scaled for the neighbours
 const YG=[
  [slabG(hullShape(1,1),3.3,-1.6),'hull'],[slabG(hullShape(1.003,1.012),.32,-.3),'trim'],[slabG(hullShape(.95,.87),3.38,3.2),'deck'],
@@ -824,7 +827,7 @@ const YG=[
  [slabG(rrShape(-11.5,-2.75,20,5.5,2.1),8.5,6.05),'s2'],[slabG(rrShape(-11.6,-2.81,20.2,5.62,2.15),7.9,6.9),'glass'],[slabG(rrShape(-13.5,-3.1,23,6.2,2.3),8.65,8.5),'s2'],
  [slabG(rrShape(-5.5,-2.1,10,4.2,1.8),10.4,8.65),'s3'],[slabG(rrShape(-5.6,-2.16,10.2,4.32,1.85),9.9,9.2),'glass'],[slabG(rrShape(-7,-2.4,12.5,4.8,2),10.6,10.45),'s2'],
  [slabG(rrShape(-21.5,-1.5,3.2,3,.5),3.43,3.3),'pool'],
- [new T3.BoxGeometry(1.25,1.3,.5).rotateY(.28).translate(19.2,2.05,2.12),'pocket'],[new T3.BoxGeometry(1.25,1.3,.5).rotateY(-.28).translate(19.2,2.05,-2.12),'pocket'],
+ [anchorPocketGeometries[0],'pocket'],[anchorPocketGeometries[1],'pocket'],
  [new T3.CylinderGeometry(.42,.56,2.1,16).scale(1,1,.72).rotateZ(.2).translate(-.7,11.6,0),'trim'],[new T3.SphereGeometry(.62,14,10).translate(-3.6,11.32,1.45),'s2'],[new T3.SphereGeometry(.62,14,10).translate(-3.6,11.32,-1.45),'s2'],[new T3.CylinderGeometry(.22,.28,.5,10).translate(-3.6,10.85,1.45),'s3'],[new T3.CylinderGeometry(.22,.28,.5,10).translate(-3.6,10.85,-1.45),'s3'],[new T3.CylinderGeometry(.08,.12,.6,8).translate(2.6,10.9,0),'s2']];
 // sheer: the deck line sweeps up toward the bow, about a metre at the stem
 const SHEER=x=>{const t=Math.max(0,Math.min(1,(x-5)/20)),a=Math.max(0,Math.min(1,(-6-x)/19));return 1.05*t*t-.42*a*a;};
@@ -901,13 +904,15 @@ sharedMaterials.add(ownGlass);
 const PARTY_LIGHT_SCALE=LIGHT_SCALE*6*6;
 const fenderG=new T3.Group();own.add(fenderG);
 const fendMat=[0,1].map(()=>new T3.MeshStandardMaterial({color:col('#20262b'),roughness:.6,emissive:new T3.Color(0,0,0)})),fendRed=new T3.MeshBasicMaterial({color:0xff2a1a});
+const ANCHOR_EYE_Y=1.15,anchorEye=new T3.Group();anchorEye.name='anchor-eye';anchorEye.position.y=ANCHOR_EYE_Y;
 const anchorM=new T3.Group();{const am=M('#3a4148',.35); // stockless (hall-type) anchor: shank into the hawse, flat crown and flukes against the hull
   const sh=new T3.Mesh(new T3.BoxGeometry(.2,1.5,.16),am);sh.position.y=.45;
   const cr=new T3.Mesh(new T3.BoxGeometry(.95,.3,.2),am);cr.position.y=-.32;
   const f1=new T3.Mesh(new T3.BoxGeometry(.3,.85,.14),am);f1.position.set(-.34,-.68,0);f1.rotation.z=-.22;
   const f2=new T3.Mesh(new T3.BoxGeometry(.3,.85,.14),am);f2.position.set(.34,-.68,0);f2.rotation.z=.22;
-  const sh2=new T3.Mesh(new T3.BoxGeometry(.5,.12,.16),am);sh2.position.y=1.15;
-  anchorM.add(sh,cr,f1,f2,sh2);}own.add(anchorM);const anchorM2=anchorM.clone();own.add(anchorM2);
+  const sh2=new T3.Mesh(new T3.BoxGeometry(.5,.12,.16),am);sh2.position.y=ANCHOR_EYE_Y;
+  anchorM.add(sh,cr,f1,f2,sh2,anchorEye);}own.add(anchorM);const anchorM2=anchorM.clone();own.add(anchorM2);
+const anchorModels=[anchorM,anchorM2],anchorEyes=[anchorEye,anchorM2.getObjectByName('anchor-eye')],anchorHawse=[new T3.Group(),new T3.Group()];own.add(...anchorHawse);
 let ownModel=null,deckY=3.38;
 function buildOwn(){
   if(ownModel)disposeTransientGroup(ownModel);
@@ -918,6 +923,8 @@ function buildOwn(){
   crew[1].position.set(-22.5*SL,deckY,-2.8*SB);crew[2].position.set(-22.5*SL,deckY,2.8*SB);
   if(tender){lampP.position.set(1,2.9,-1.2);lampS.position.set(1,2.9,1.2);}else{lampP.position.set(13*SL,6.3*hs,-3.9*SB);lampS.position.set(13*SL,6.3*hs,3.9*SB);}
   anchorM.scale.setScalar(tender?.32:.62);anchorM2.scale.setScalar(.62);anchorM2.visible=!tender;
+  const hx=(HAWSE.x+Math.sin(HAWSE.yaw)*HAWSE.depth/2)*SL,hy=(HAWSE.y+HAWSE.eye)*hs,hz=(HAWSE.z+Math.cos(HAWSE.yaw)*HAWSE.depth/2)*SB;
+  anchorHawse[0].position.set(tender?LEN/2:hx,tender?1.1:hy,tender?0:-hz);anchorHawse[1].position.set(hx,hy,hz);
   lampP.scale.setScalar(tender?.4:1);lampS.scale.setScalar(tender?.4:1);
   lampM.position.set(tender?1:2.6*SL,tender?3.3:11.75*hs,0);lampA.position.set(tender?-5.8:-25*SL,tender?1.4:deckY+.7,0);anchMast.position.set(tender?0:-8*SL,tender?3.1:10.65*hs,0);anchMast.scale.x=anchMast.scale.z=tender?.5:1;
   while(fenderG.children.length){const ch=fenderG.children[0];fenderG.remove(ch);ch.geometry.dispose();}
@@ -1368,12 +1375,11 @@ function sync3D(dt){
     spawn(1,S.x+c0*LEN*.46-s0*sd*1.5,S.y+s0*LEN*.46+c0*sd*1.5,S.u*c0*.4-s0*sd*rnd(1,2.5),S.u*s0*.4+c0*sd*rnd(1,2.5),rnd(.6,1.1)*Math.max(.5,Math.sqrt(SL)),rnd(1.5,3),.5);}
   crew[0].position.set(S.bowX*SL,deckY+sheerAt(S.bowX*SL),S.bowY*SB);crew[1].position.y=deckY+sheerAt(crew[1].position.x);crew[2].position.y=deckY+sheerAt(crew[2].position.x);
   {const tender=shipId==='tender';
-    const seat=sd=>tender?[25.05*SL,deckY-.35+sheerAt(25*SL),0]:[19.25*SL,deckY-1.33,sd*2.4*SB];
-    (tender?[[anchorM,0]]:[[anchorM,-1],[anchorM2,1]]).forEach(([m,sd])=>{const st=seat(sd),A=S.anchors.find(a=>a.side===sd);let ay=st[1],av=true;
-      if(A){A.t+=dt;const q=Math.min(1,A.t/.9);ay=st[1]-q*q*(st[1]+3);av=q<1;}
-      else if(S.weigh[sd]>0){S.weigh[sd]-=dt/1.2;ay=st[1]-Math.max(0,S.weigh[sd])*(st[1]+3);
-        if(ay>-.3&&ay<st[1]-.4&&Math.random()<dt*30){v3a.set(st[0],ay,st[2]*1.05).applyMatrix4(own.matrixWorld);const q=puff(v3a.x,v3a.y,v3a.z,false);if(q){q.spray=true;q.sp.material.color.setHex(0xdfe8ec);q.life=q.max=rnd(.5,.9);q.s=rnd(.25,.45);q.vx=rnd(-.3,.3);q.vz=rnd(-.3,.3);q.vy=rnd(-.5,.3);}}}
-      m.visible=av;m.position.set(st[0],ay,st[2]*(A?1.08:1));m.rotation.set(0,-sd*.28,0);});}
+    for(let i=0;i<(tender?1:2);i++){const m=anchorModels[i],sd=tender?0:i?1:-1,st=anchorHawse[i].position,A=S.anchors.find(a=>a.side===sd),seatY=st.y-ANCHOR_EYE_Y*m.scale.y;let ay=seatY,av=true;
+      if(A){A.t+=dt;const q=Math.min(1,A.t/.9);ay=seatY-q*q*(seatY+3);av=q<1;}
+      else if(S.weigh[sd]>0){S.weigh[sd]-=dt/1.2;ay=seatY-Math.max(0,S.weigh[sd])*(seatY+3);
+        if(ay>-.3&&ay<seatY-.4&&Math.random()<dt*30){v3a.set(st.x,ay,st.z).applyMatrix4(own.matrixWorld);const q=puff(v3a.x,v3a.y,v3a.z,false);if(q){q.spray=true;q.sp.material.color.setHex(0xdfe8ec);q.life=q.max=rnd(.5,.9);q.s=rnd(.25,.45);q.vx=rnd(-.3,.3);q.vz=rnd(-.3,.3);q.vy=rnd(-.5,.3);}}}
+      m.visible=av;m.position.set(st.x,ay,st.z);m.rotation.set(0,sd*HAWSE.yaw,0);}}
   hands.forEach((h,i)=>{if(handF[i]){handF[i].visible=true;handF[i].position.set(h.x+.9,h.h<.5?1.2:1.6,h.y);}});
   for(let i=hands.length;i<2;i++)handF[i].visible=false;
   own.updateMatrixWorld();fxUpdate(dt);
@@ -1382,30 +1388,33 @@ function sync3D(dt){
     if(pt>0){S.fPop[i]=pt+dt;m.visible=out&&pt<1.3;m.material=fendRed;m.position.set(b.x,b.y+11*pt-12*pt*pt,b.z+(sd?1:-1)*7*pt);m.rotation.set(pt*14,0,pt*9);m.scale.setScalar(Math.max(.2,1-pt*.6));}
     else{const q=S.fSq[sd];m.visible=out;m.material=fendMat[sd];m.position.copy(b);m.rotation.set(0,0,0);m.scale.set(1+q*.35,1,1-q*.5);}});
   for(let i=0;i<2;i++){const k=clamp((S.fStress[i]-.9)/1.1,0,1);fendMat[i].color.setRGB(.014+.9*k,.02,.024);fendMat[i].emissive.setRGB(.5*k*(.6+.4*Math.sin(T*18)),0,0);}
-  let nLinks=0;
-  [chainM,chainM2].forEach((cm,ci)=>{const A=S.anchors[ci];cm.visible=false;if(!A)return;
-    const hp=hawseFor(A.side),hs0=A.side||1,tnd=shipId==='tender';
-    // start just outside the pocket (the rendered bow is about 2.33 m half-breadth there)
-    v3a.set(tnd?hp[0]+.2:19.2*SL,tnd?deckY-.3:1.62*SL,tnd?0:hs0*(2.33*SB+.32));
-    v3d.set(A.x,0,A.y);own.worldToLocal(v3d);let lx=v3d.x-v3a.x,lz=v3d.z-v3a.z;
-    if(!tnd){const minOut=Math.abs(lx)*.45+.8;if(lz*hs0<minOut)lz=hs0*minOut;} // a chain leading across the stem is drawn round the outside of the flare
-    const ll=Math.hypot(lx,lz)||1,d=Math.hypot(A.x-S.x,A.y-S.y),rc=Math.min(Math.max(d,2),A.held?2+deckY*1.3:1+deckY*.45);
-    v3b.set(v3a.x+lx/ll*rc,-2.5,v3a.z+lz/ll*rc);own.localToWorld(v3a);own.localToWorld(v3b);v3b.y=-2.5;
-    // while the anchor is still falling, the chain runs to the anchor itself
-    if(A.t<.95){const am=tnd||A.side<0?anchorM:anchorM2;am.getWorldPosition(v3b);v3b.y+=.55*(tnd?.32:.62);}
-    v3c.addVectors(v3a,v3b).multiplyScalar(.5);v3c.y-=A.held?.05:.35;
+  let nLinks=0;chainM.visible=chainM2.visible=false;
+  for(let i=0,tnd=shipId==='tender';i<(tnd?1:2);i++){const sd=tnd?0:i?1:-1,A=S.anchors.find(a=>a.side===sd),movingEye=A?A.t<.95:S.weigh[sd]>0;if(!A&&!movingEye)continue;
+    const hp=anchorHawse[i].position;anchorHawse[i].getWorldPosition(v3a);
+    // Both ends inherit their real object transforms, including hull scale, heel and pitch.
+    if(movingEye)anchorEyes[i].getWorldPosition(v3b);
+    else{
+      v3d.set(A.x,0,A.y);own.worldToLocal(v3d);let lx=v3d.x-hp.x,lz=v3d.z-hp.z;
+      if(!tnd){const minOut=Math.abs(lx)*.45+.8;if(lz*sd<minOut)lz=sd*minOut;} // lead around the outside of the flare
+      const ll=Math.hypot(lx,lz)||1,d=Math.hypot(A.x-S.x,A.y-S.y),rc=Math.min(Math.max(d,2),A.held?2+deckY*1.3:1+deckY*.45);
+      v3b.set(hp.x+lx/ll*rc,-2.5,hp.z+lz/ll*rc);own.localToWorld(v3b);v3b.y=-2.5;
+    }
+    const span=v3a.distanceTo(v3b);if(span<1e-5)continue;
+    v3c.addVectors(v3a,v3b).multiplyScalar(.5);v3c.y-=Math.min(A&&!A.held?.35:.05,span*.2);
     /* links ride on the chain itself: as chain pays out or heaves in they slide out of / back into the pocket, and the paint marks travel with them */
     const Lc=v3a.distanceTo(v3c)+v3c.distanceTo(v3b),ls=tnd?.5:1,P=.2*ls;
-    const V=A.t<.95?Lc:Math.max(A.L0,Lc); /* falling: the chain spans pocket to anchor; after that the hawse is at the paid-out length */
-    for(let j=Math.max(0,Math.ceil((V-Lc)/P)),j1=Math.floor(V/P);j<=j1&&nLinks<LINK_MAX;j++){
+    const V=movingEye?Lc:Math.max(A.L0,Lc),limit=Math.min(LINK_MAX,nLinks+LINK_MAX/(tnd?1:2)); /* keep a link budget for each hawse */
+    // Draw from the pocket downward, so a full pool can only shorten the submerged tail.
+    for(let j=Math.ceil(V/P),j0=Math.max(0,Math.ceil((V-Lc)/P));j>=j0&&nLinks<limit;j--){
       const c=j*P,t=clamp((V-c)/Lc,0,1),u=1-t;
       _q.set(u*u*v3a.x+2*u*t*v3c.x+t*t*v3b.x,u*u*v3a.y+2*u*t*v3c.y+t*t*v3b.y,u*u*v3a.z+2*u*t*v3c.z+t*t*v3b.z);
       _t.set(2*u*(v3c.x-v3a.x)+2*t*(v3b.x-v3c.x),2*u*(v3c.y-v3a.y)+2*t*(v3b.y-v3c.y),2*u*(v3c.z-v3a.z)+2*t*(v3b.z-v3c.z)).normalize();
+      if(c>V)_q.addScaledVector(_t,V-c); // the next link slides inside the pocket; the visible run never floats clear of it
       _n.crossVectors(_t,_up);if(_n.lengthSq()<1e-6)_n.set(1,0,0);_n.normalize();_b.crossVectors(_t,_n);
       if(j%2)_lm.makeBasis(_t,_b,_n.negate());else _lm.makeBasis(_t,_n,_b);_lm.scale(v3d.set(ls,ls,ls));_lm.setPosition(_q);
       chainLinks.setMatrixAt(nLinks,_lm);const kk=Math.floor(c/10),m=c-kk*10;
       chainLinks.setColorAt(nLinks,kk>=1&&m<2?markC[(kk-1)%5]:(j%2?chainC:chainL));nLinks++;}
-  });
+  }
   chainLinks.count=nLinks;uploadActive(chainLinks.instanceMatrix,nLinks);if(chainLinks.instanceColor)uploadActive(chainLinks.instanceColor,nLinks);
   lines.forEach((ln,i)=>{
     const r=ropes[i],ld=leads[i],st=ln.state;r.visible=st==='haul'||st==='fast';ld.visible=st==='throw'||st==='haul';
@@ -1477,8 +1486,9 @@ function updateAnchorageGoal(){
 function updateMooringUI(){
   updateAnchorageGoal();
   lnBtns.forEach((b,i)=>{const st=lines[i].state;
-    const cls='ln'+(i>3?' sp':'')+(st==='throw'||st==='haul'?' t':st==='fast'?' f':'')+(sel===i?' sel':''),tx=st==='fast'?'✓':st==='stowed'?'':'…';
-    if(b.className!==cls)b.className=cls;if(b.textContent!==tx)b.textContent=tx;});
+    const cls='ln'+(i>3?' sp':'')+(st==='throw'||st==='haul'?' t':st==='fast'?' f':'')+(sel===i?' sel':''),tx=st==='fast'?'✓':st==='stowed'?'+':'…',mark=b.querySelector('.line-state');
+    if(b.className!==cls)b.className=cls;if(mark&&mark.textContent!==tx)mark.textContent=tx;
+    b.setAttribute('aria-pressed',String(sel===i));b.setAttribute('aria-label',LINE_DEF[i][0]+' line: '+(st==='fast'?'made fast':st==='stowed'?'stowed':'working')+(sel===i?', selected':''));});
   for(const button of FEND_BTNS){const chosen=+button.dataset.fender===S.fend;button.classList.toggle('on',chosen);button.setAttribute('aria-pressed',String(chosen));}
   const out=lines.filter(l=>l.state!=='stowed'),fast=out.filter(l=>l.state==='fast'),a=S.anchors[0];
   const statuses={anchors:S.anchorCmd?'Working':S.anchors.some(a=>a.weighing)?'Weighing':S.anchors.length>1?'Both':a?(a.side<0?'Port':a.side>0?'Starboard':'Bow'):'',lines:out.length?out.length+' '+(fast.length===out.length?'fast':'out'):'',fenders:FENDL[S.fend]||(S.fendN.some(n=>n>0)?'Stowing':'')};
@@ -1488,7 +1498,7 @@ function updateMooringUI(){
     select.value=String(tender?0:S.anchSel);
     const sides=anchSides(),anchors=selectedAnchors(),pending=(S.dropSides||[]).filter(sd=>sides.includes(sd)),retrieving=anchors.some(a=>a.weighing);
     const drop=$('anchDrop'),weigh=$('anchWeigh');drop.disabled=!sides.some(sd=>!S.anchors.some(a=>a.side===sd)&&!pending.includes(sd));
-    const dropText=pending.length?'Dropping…':'Drop';if(drop.textContent!==dropText)drop.textContent=dropText;
+    const dropText=pending.length?'Drop…':'Drop';if(drop.textContent!==dropText)drop.textContent=dropText;
     weigh.disabled=!anchors.length;const weighText=retrieving?'Stop':'Bring in';if(weigh.textContent!==weighText)weigh.textContent=weighText;weigh.classList.toggle('on',retrieving);
     $('chIn').disabled=$('chOut').disabled=!anchors.length;
     const length=A=>(Math.floor(A.L0*10+1e-8)/10).toFixed(1)+' m',chain=$('anchorChain');
@@ -1496,7 +1506,7 @@ function updateMooringUI(){
     if(chain.textContent!==chainText)chain.textContent=chainText;
     chain.setAttribute('aria-label',sides.map(sd=>{const A=anchors.find(a=>a.side===sd);return(sd<0?'Port':sd>0?'Starboard':'Bow')+': '+(A?length(A)+' of chain out':'stowed');}).join('; '));
     const tx=$('scopeTx'),dragging=anchors.some(a=>a.drag),holding=anchors.length&&anchors.every(a=>a.set&&!a.drag),sc=Math.ceil(18*Math.max(.7,SL));
-    const text=pending.length?'Preparing selected anchor'+(pending.length>1?'s':''):retrieving?'Bringing in':dragging?'Dragging':!anchors.length?'Stowed':holding?'Holding':anchors.some(a=>a.L0<sc)?'Chain held · use +':'Chain held';
+    const text=pending.length?'Preparing anchor'+(pending.length>1?'s':''):retrieving?'Bringing in':dragging?'Dragging':!anchors.length?'Stowed':holding?'Holding':anchors.some(a=>a.L0<sc)?'Chain held · use +':'Chain held';
     if(tx.textContent!==text)tx.textContent=text;tx.className='lt'+(holding?' ok':dragging?' bad':'');
   }
   const one=sel>=0&&lines[sel].state==='fast'?lines[sel]:null,hd=mooringSection==='lines'&&fast.length>0,ab=$('actBox');
@@ -1524,7 +1534,7 @@ function hud(){
 }
 
 /* ---------- loop ---------- */
-let last=performance.now(),acc=0,topH=0,botH=0,RX=0,RY=0,RP=0,hudLast=-Infinity;
+let last=performance.now(),acc=0,topH=0,botH=0,viewOffsetX=0,RX=0,RY=0,RP=0,hudLast=-Infinity;
 let rafId=0,renderUntil=0,frameEpoch=0,initialFrameDrawn=false,contextUnavailable=false,drawingFrame=false;
 let layoutDirty=true,projectionDirty=true,bufferWidth=0,bufferHeight=0,bufferRatio=0;
 const qualityController=new AdaptiveQuality();
@@ -1537,10 +1547,18 @@ function invalidateFrame(){
   if(!rafId&&!drawingFrame&&!document.hidden&&!contextUnavailable){last=performance.now();rafId=requestAnimationFrame(frame);}
 }
 function invalidateLayout(){layoutDirty=true;invalidateFrame();}
+function syncMooringLayout(){
+  const wide=!!mooringSection&&app.clientWidth>=640&&app.clientWidth>app.clientHeight&&app.clientHeight<=520;
+  if(app.classList.contains('mooring-split')!==wide)releaseControls();
+  app.classList.toggle('mooring-wide',wide);app.classList.toggle('mooring-split',wide);
+}
 function measureLayout(){
   if(!layoutDirty)return;layoutDirty=false;
+  syncMooringLayout();
   topH=hudEl.offsetHeight;const ar=app.getBoundingClientRect(),dr=$('dock').getBoundingClientRect();
   botH=Math.max(0,Math.round(app.clientHeight-dr.top+ar.top));
+  // In short landscape, frame the boat over the helm side, clear of the open equipment card.
+  viewOffsetX=app.classList.contains('mooring-split')?Math.round(app.clientWidth/2-(dr.left-ar.left+dr.width/2)):0;
   app.style.setProperty('--bot',botH+'px');app.style.setProperty('--top',topH+'px');resize();
 }
 function frame(now){
@@ -1625,7 +1643,7 @@ function drawFrame(now){
   camera.position.set(cam.x+Math.sin(yawE)*cp*camD+rnd(-sh,sh),4+Math.sin(pitchE)*camD+rnd(-sh,sh),cam.y+Math.cos(yawE)*cp*camD);
   camera.up.set(0,1,0);camera.lookAt(cam.x,4,cam.y);
   // keep the boat in the middle of whatever screen the panels leave free
-  if(projectionDirty){camera.aspect=AW/AH;camera.setViewOffset(AW,AH,0,Math.round(botH/2+AH*.035),AW,AH);projectionDirty=false;}
+  if(projectionDirty){camera.aspect=AW/AH;camera.setViewOffset(AW,AH,viewOffsetX,Math.round(botH/2+AH*.035),AW,AH);projectionDirty=false;}
   camera.updateMatrixWorld();
   skyM.position.copy(camera.position);U.uCtr.value.set(cam.x,cam.y);
   sync3D(dt);updateSmoke(dt);
@@ -1804,14 +1822,13 @@ function setMooringSection(section){
     releaseMooringInputs();
     if(section==='anchors')sel=-1;
     mooringSection=section;
-    if(section)$('gLines').scrollTop=0;
   }
   for(const [name,id] of Object.entries(panels)){$(id).hidden=name!==section;$(name+'T').setAttribute('aria-controls',id);$(name+'T').setAttribute('aria-expanded',String(name===section));}
-  updateMooringUI();invalidateLayout();
+  syncMooringLayout();updateMooringUI();invalidateLayout();
   if(focused&&section!==previous){const heading=$((section||previous)+'T');if(!heading.closest('[inert]'))heading.focus({preventScroll:true});}
 }
 for(const section of ['anchors','lines','fenders'])$(section+'T').onclick=()=>setMooringSection(mooringSection===section?null:section);
-{const CORN=['c-tr','c-br','c-bl','c-tl'],g=$('gLines'),setC=c=>{CORN.forEach(k=>g.classList.toggle(k,k===c));try{localStorage.setItem('sternto-panel',c);}catch(e){}};
+{const CORN=['c-tr','c-br','c-bl','c-tl'],g=$('gLines'),setC=c=>{CORN.forEach(k=>g.classList.toggle(k,k===c));try{localStorage.setItem('sternto-panel',c);}catch(e){}invalidateLayout();};
  try{const c=localStorage.getItem('sternto-panel');if(CORN.includes(c))setC(c);}catch(e){}
  $('cornerBtn').onclick=()=>{const cur=CORN.find(k=>g.classList.contains(k))||'c-tr';setC(CORN[(CORN.indexOf(cur)+1)%4]);};}
 addEventListener('keydown',e=>{
@@ -1831,7 +1848,7 @@ addEventListener('keydown',e=>{
   if(e.target.closest('input,textarea,select,[contenteditable="true"]'))return;
   if((k===' '||k==='Enter')&&e.target.closest('button,a'))return;
   if(state==='play'){
-    if(k==='Escape'){if(!e.repeat)openMenu();e.preventDefault();return;}
+    if(k==='Escape'){if(!e.repeat){if(mooringSection)setMooringSection(null);else openMenu();}e.preventDefault();return;}
     if(k==='p'){if(!e.repeat)togglePause();e.preventDefault();return;}
     if(hold||S.cineT!=null&&!S.cineDone)return;
     let used=true;
@@ -2025,7 +2042,7 @@ $('rNext').onclick=()=>{if(banner==='dep'){$('result').hidden=true;passage();}el
 /* ---------- boot ---------- */
 function boot(d){
   addEventListener('resize',invalidateLayout);
-  const ro=new ResizeObserver(invalidateLayout);[app,hudEl,$('dock')].forEach(el=>ro.observe(el));
+  const ro=new ResizeObserver(invalidateLayout);[app,hudEl,$('dock'),$('gLines')].forEach(el=>ro.observe(el));
   const mo=new MutationObserver(invalidateLayout);[app,$('dock')].forEach(el=>mo.observe(el,{attributes:true,attributeFilter:['class']}));
   for(const type of ['pointerdown','pointermove','pointerup','wheel','keydown','keyup','input','click','focusin'])document.addEventListener(type,invalidateFrame,{capture:true,passive:true});
   document.addEventListener('visibilitychange',()=>{
