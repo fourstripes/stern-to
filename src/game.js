@@ -1324,7 +1324,7 @@ function sync3D(dt){
 /* ---------- readouts ---------- */
 const PTS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const pt=d=>PTS[Math.round(d/22.5)%16];
-const lat=v=>Math.abs(v)<.05?'0.0':(v<0?'◀ ':'')+Math.abs(v).toFixed(1)+(v>0?' ▶':'');
+const lat=v=>Math.abs(v)<.05?'0.0':(v<0?'◀\uFE0E ':'')+Math.abs(v).toFixed(1)+(v>0?' ▶\uFE0E':'');
 const lv=[$('lvP'),$('lvS')],LV_TRACK=lv.map(e=>e.querySelector('.track')),LV_K=lv.map(e=>e.querySelector('.knob')),LV_R=lv.map(e=>e.querySelector('.rpm')),LV_V=lv.map(e=>e.querySelector('.val')),ANC=[...document.querySelectorAll('.anc')],RUD_G=document.querySelector('.dock .rudrow svg'),lnBtns=[...document.querySelectorAll('.ln')],hullMeter=document.querySelector('.dmg');
 let hudKey='';
 function hudFast(){

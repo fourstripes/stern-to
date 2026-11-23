@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="modulepreload" href="vendor/three.module.min.js">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="assets/game.css">
+<link rel="stylesheet" href="assets/game.css?v=20261123-mobile">
 </head>
 <body>
 <section id="startup" class="startup" role="status" aria-live="polite" aria-atomic="true">
@@ -27,7 +27,7 @@
   <div id="ptr" hidden></div>
 
   <header class="hud">
-    <div class="berth"><span id="bName">Fuel quay</span><span class="t" id="bTime">0:00</span><span class="dmgl">Hull</span><div class="dmg" role="meter" aria-label="Hull condition" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="dmgBar"></i></div><button class="btn" id="pauseBtn" aria-pressed="false">Pause</button><button class="btn" id="menuBtn">Menu</button><span class="plays" id="plays" hidden title="Games played"><svg viewBox="0 0 10 10" width="8" height="8" aria-hidden="true"><path d="M2 1l7 4-7 4z" fill="currentColor"/></svg><b id="playsN"></b><span class="pl"> plays</span></span><span class="nav" title="Where to go next"><svg id="navA" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".45"/><path d="M12 3.5l5.5 13.5-5.5-3.2-5.5 3.2z" fill="currentColor"/></svg><b id="navL">Berth</b><span id="navD">0 m</span></span></div>
+    <div class="berth"><span id="bName">Fuel quay</span><span class="t" id="bTime">0:00</span><span class="dmgl">Hull</span><div class="dmg" role="meter" aria-label="Hull condition" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="dmgBar"></i></div></div>
     <dl class="inst">
       <div><dt>Speed</dt><dd id="iSpd">0.0<small>kn</small></dd></div>
       <div><dt>Bow</dt><dd id="iBow">0.0</dd></div>
@@ -37,6 +37,8 @@
       <div><dt>Wind</dt><dd><span id="wArrow">↑</span> <span id="iWind">0</span><small>kn</small></dd></div>
       <div class="opt"><dt>To berth</dt><dd id="iDist">0<small>m</small></dd></div>
     </dl>
+    <span class="nav" title="Where to go next"><svg id="navA" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".45"/><path d="M12 3.5l5.5 13.5-5.5-3.2-5.5 3.2z" fill="currentColor"/></svg><b id="navL">Berth</b><span id="navD">0 m</span></span>
+    <div class="hud-actions"><button class="btn" id="pauseBtn" aria-pressed="false">Pause</button><button class="btn" id="menuBtn">Menu</button></div>
   </header>
   <div id="toast" class="off" role="status" aria-live="polite" aria-atomic="true"></div>
 
@@ -46,7 +48,7 @@
         <b>PORT</b><button class="bmp" data-d="1" aria-label="Port engine: hold ahead">AHD</button><div class="track" role="slider" tabindex="0" aria-label="Port engine" aria-orientation="vertical" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Neutral"><i class="rpm"></i><i class="knob"></i></div><button class="bmp" data-d="-1" aria-label="Port engine: hold astern">AST</button><span class="val">STOP</span>
       </div>
     <div class="g g-mid">
-      <div class="thr"><button class="btn" id="thL" aria-label="Thruster: bow to port">◀</button><span>Thruster</span><button class="btn" id="thR" aria-label="Thruster: bow to starboard">▶</button></div>
+      <div class="thr"><button class="btn" id="thL" aria-label="Thruster: bow to port"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M16 5 7 12l9 7z" fill="currentColor"/></svg></button><span>Thruster</span><button class="btn" id="thR" aria-label="Thruster: bow to starboard"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m8 5 9 7-9 7z" fill="currentColor"/></svg></button></div>
       <label class="rud" for="rud"><span class="rudrow"><span>Rudder <b id="rudV">midships</b></span><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"/><path id="rudG" d="M12 4l5 14-5-3-5 3z" fill="#ffb547"/></svg></span><input type="range" id="rud" aria-label="Rudder" aria-valuetext="Midships" min="-35" max="35" step="1" value="0"></label>
       <div class="trio"><button class="btn" id="syncBtn" aria-pressed="false" title="Move both engines together">Sync</button><button class="btn big" id="stop">All stop</button><button class="btn" id="midBtn" title="Rudder to midships">Midships</button></div>
     </div>
@@ -61,12 +63,12 @@
       <div class="anrow"><button class="anc" data-a="-1" aria-label="Port anchor"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M10.6 3h2.8v9.2h-2.8z M7 2.6h10v1.6H7z M5.2 12.6h13.6v2.4H5.2z M5.4 14.8l3 0 1.6 5.4-2.8.8z M18.6 14.8l-3 0-1.6 5.4 2.8.8z" fill="currentColor"/></svg></button><button class="anc" data-a="1" aria-label="Starboard anchor"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M10.6 3h2.8v9.2h-2.8z M7 2.6h10v1.6H7z M5.2 12.6h13.6v2.4H5.2z M5.4 14.8l3 0 1.6 5.4-2.8.8z M18.6 14.8l-3 0-1.6 5.4 2.8.8z" fill="currentColor"/></svg></button></div>
       <div class="shipwrap"><div class="ship" id="shipBox">
       <svg viewBox="0 0 56 128" preserveAspectRatio="none" aria-hidden="true"><path d="M28 3C42 22 48 40 48 62L46 120Q46 125 41 125L15 125Q10 125 10 120L8 62C8 40 14 22 28 3Z"/></svg>
-      <button class="ln" data-i="0" style="left:-6px;top:11%" aria-label="Port bow line"></button>
-      <button class="ln" data-i="1" style="right:-6px;top:11%" aria-label="Starboard bow line"></button>
-      <button class="ln" data-i="2" style="left:-8px;bottom:-4px" aria-label="Port stern line"></button>
-      <button class="ln" data-i="3" style="right:-8px;bottom:-4px" aria-label="Starboard stern line"></button>
-      <button class="ln sp" data-i="4" style="top:35%" aria-label="Forward spring"></button>
-      <button class="ln sp" data-i="5" style="top:57%" aria-label="Aft spring"></button>
+      <button class="ln" data-i="0" aria-label="Port bow line"></button>
+      <button class="ln" data-i="1" aria-label="Starboard bow line"></button>
+      <button class="ln" data-i="2" aria-label="Port stern line"></button>
+      <button class="ln" data-i="3" aria-label="Starboard stern line"></button>
+      <button class="ln sp" data-i="4" aria-label="Forward spring"></button>
+      <button class="ln sp" data-i="5" aria-label="Aft spring"></button>
     </div></div>
       </div>
       <div class="lnlist"><button class="btn" id="fendBtn">Fenders</button></div>
@@ -88,6 +90,7 @@
       </div>
       
       <div class="acts"><button class="btn hot go" id="resume" hidden>Resume</button><button class="btn hot go" id="go">Cast off</button><button class="btn go" id="helpBtn">Controls</button></div>
+      <p class="plays" id="plays" hidden><b id="playsN"></b><span>games played</span></p>
     </div>
   </div>
 
