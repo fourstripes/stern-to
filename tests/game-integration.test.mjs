@@ -104,7 +104,7 @@ test('restart clears transient wake, foam, smoke, ropes and vessel motion', t =>
 
 test('dynamic foam uploads cover the active instances and stop when time is frozen', t => {
   const h = game(t);
-  h.run('parts=[];spawn(0,S.x,S.y,0,0,1,5,0);foamPass(1/60);');
+  h.run('parts=[];spawn(0,S.x,S.y,0,0,1,5,0);foamPass(1/30);');
   assert.equal(h.run('sP.usage'), THREE.DynamicDrawUsage);
   assert.equal(h.run('sC.usage'), THREE.DynamicDrawUsage);
   assert.equal(h.run('chainLinks.instanceMatrix.usage'), THREE.DynamicDrawUsage);

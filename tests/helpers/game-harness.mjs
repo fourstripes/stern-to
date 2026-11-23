@@ -3,6 +3,9 @@ import vm from 'node:vm';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import * as THREE from 'three';
 import * as runtime from '../../src/runtime.js';
+import * as physics from '../../src/physics.js';
+import * as navigation from '../../src/navigation.js';
+import * as water from '../../src/water.js';
 
 // This is a JavaScript/DOM integration harness, not a browser or a GPU renderer.
 // All game code and Three.js geometry/material/matrix classes execute unchanged.
@@ -153,7 +156,7 @@ export function createGameHarness(options = {}) {
     }
   }
 
-  Object.assign(window, runtime, { T3: { ...THREE, WebGLRenderer: FakeRenderer } });
+  Object.assign(window, runtime, physics, navigation, water, { T3: { ...THREE, WebGLRenderer: FakeRenderer } });
   const source = readFileSync(new URL('../../src/game.js', import.meta.url), 'utf8')
     .replace(/^import\s[^;]+;\s*$/gm, '').replace('export function startGame', 'function startGame');
   const lastBrace = source.lastIndexOf('}');

@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="modulepreload" href="vendor/three.module.min.js">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="assets/game.css?v=20261123-mooring">
+<link rel="stylesheet" href="assets/game.css?v=20261123-simulation">
 </head>
 <body>
 <section id="startup" class="startup" role="status" aria-live="polite" aria-atomic="true">
@@ -88,6 +88,12 @@
       </div>
     </section>
 
+  <section id="anchorGoal" class="anchor-goal" aria-label="Anchorage objective" hidden>
+    <div class="eyebrow">Final anchorage</div>
+    <div class="anchor-readout"><span>Chain out</span><strong><span id="anchorPaid">0.0</span> / <span id="anchorNeed">18</span> m</strong></div>
+    <div id="anchorProgress" class="anchor-progress" role="progressbar" aria-label="Chain paid out" aria-valuemin="0" aria-valuemax="18" aria-valuenow="0"><i></i></div>
+    <p id="anchorHint" role="status">Drop an anchor inside the ring.</p>
+  </section>
   <div id="fade"></div>
 
   <div class="sheet" id="menu" role="dialog" aria-modal="true" aria-labelledby="menuTitle" tabindex="-1">
@@ -102,14 +108,14 @@
         <label for="cS">Swell <b id="cSv">0.2 m</b><input type="range" id="cS" min="0" max="1.5" step="0.1" value="0.2"></label>
       </div>
       
-      <div class="acts"><button class="btn hot go" id="resume" hidden>Resume</button><button class="btn hot go" id="go">Cast off</button><button class="btn go" id="helpBtn">Controls</button></div>
+      <div class="acts"><button class="btn hot go" id="resume" hidden>Resume</button><button class="btn hot go" id="go">Cast off</button><button class="btn go" id="helpBtn">Controls &amp; rules</button></div>
       <p class="plays" id="plays" hidden><b id="playsN"></b><span>games played</span></p>
     </div>
   </div>
 
   <div class="sheet" id="help" role="dialog" aria-modal="true" aria-labelledby="helpTitle" tabindex="-1" hidden>
     <div class="card">
-      <h2 class="eyebrow" id="helpTitle">Controls</h2>
+      <h2 class="eyebrow" id="helpTitle">Controls &amp; rules</h2>
       <div class="keys">
         <div><kbd>W</kbd><kbd>S</kbd> port engine ahead, astern</div>
         <div><kbd>↑</kbd><kbd>↓</kbd> starboard engine ahead, astern</div>
@@ -132,6 +138,16 @@
         <li>Tap Anchors, Lines or Fenders to open those controls. Tap the same heading again to close them.</li>
         <li>Tap a line on the Lines panel to throw it, then hold Heave in or Slack. They work every line unless you tap one to single it out.</li>
       </ul>
+      <h3 class="eyebrow">Harbour navigation</h3>
+      <ul class="touchhint">
+        <li>Follow the amber waypoint through clear water, then approach the berth slowly. In this harbour, aim for 6 kn or less near docks and in the channel.</li>
+        <li>Entering a marked channel, keep red marks to port and green marks to starboard. Keep to the starboard side when there is room.</li>
+        <li>An east cardinal mark has black and yellow bands and two outward-pointing cones. Pass to its east.</li>
+        <li>Meeting head-on: both boats turn to starboard. Crossing: give way to a boat on your starboard side and pass behind it.</li>
+        <li>Overtaking: keep clear until safely past. Leave room for slowing and turning, and act early if another boat is not keeping clear.</li>
+        <li>All stop selects neutral; momentum remains. Use short astern bursts to brake, and rig fenders before coming alongside.</li>
+        <li>At the final anchorage, drop inside the ring, pay out the chain shown in the objective, then hold the chain and settle for three seconds. The mission finishes with a camera pan and zoom.</li>
+      </ul>
       <button class="btn" id="minBtn" aria-pressed="false">Mirroring mode · off</button>
       <p class="mnote">Smaller, see-through controls for showing the game on a TV. They brighten while you touch them.</p>
       <button class="btn hot go" id="helpClose">Back</button>
@@ -153,7 +169,7 @@
   </div>
 </div>
 
-<script type="module" src="src/main.js?v=20261123-mooring"></script>
+<script type="module" src="src/main.js?v=20261123-simulation"></script>
 
 
 </body>

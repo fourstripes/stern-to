@@ -22,13 +22,17 @@ Open `http://127.0.0.1:8080/` in a current browser with WebGL 2 enabled. The ES 
 | `assets/game.css` | Desktop, touch and responsive presentation |
 | `src/main.js` | Loading, first-frame readiness and graphics recovery messages |
 | `src/game.js` | Vessel data, simulation, scene construction, controls and mission flow |
+| `src/physics.js` | Vessel forces, added mass, rudder response and contact impulses |
+| `src/navigation.js` | Traffic encounters, collision avoidance and clear-water guidance |
+| `src/water.js` | Shared wave sampling, shader surface maths, motion and detail budgets |
 | `src/runtime.js` | Fixed timestep, adaptive quality and drawing-buffer budgets |
 | `vendor/three.module.min.js` | Local, pinned Three.js r187 bundle with the exports the game uses |
 | `vendor/manifest.json` | Engine version, package integrity and bundle checksum |
 | `tests/` | Timing, simulation, controls, startup and whole-game integration checks |
 | `docs/review-2026-11-23.md` | Review decisions, verification and remaining visual release check |
+| `docs/simulation-review-2026-11-23.md` | Physics calibration, water and traffic changes, anchorage rules and validation |
 
-Game code is organised by named sections and functions. The boat handling coefficients and existing challenges are preserved.
+The core simulation runs at 60 Hz. Vessel dynamics, water sampling and navigation are small modules that can be checked without a browser. The three hulls have distinct calibrated handling; the existing harbours and four-stop mission remain.
 
 ## Controls
 
@@ -50,6 +54,20 @@ Game code is organised by named sections and functions. The boat handling coeffi
 Pointer and touch controls mirror these actions. Each engine slider and the rudder also support focused keyboard interaction. Momentary buttons accept held Enter or Space. The game pauses when its page becomes hidden; press Play when returning.
 
 Anchors, Lines and Fenders start collapsed. Tap a heading to show its controls, or tap it again to close them; only one section opens at a time. Closing a section leaves deployed equipment in place and stops its held hauling controls. Small status labels keep active equipment visible while the sections are closed. Fenders can be selected directly as stowed, port, starboard or both.
+
+Weigh retrieves the anchor over time. Hold chain pauses retrieval, and manual Heave or Slack takes over the selected anchor. All stop selects neutral; use astern thrust to brake the boat's momentum.
+
+## Mission navigation and the final anchorage
+
+The amber waypoint guides the boat around land to the next berth. Red and green lateral marks follow IALA region A: red to port and green to starboard on entry. East-cardinal cones point away from each other; safe passage is to their east. The game's harbour zones use a 6 kn advisory. The Controls & rules menu explains head-on, crossing and overtaking encounters. Traffic predicts close approaches, slows or alters course when needed, and checks nearby hulls and quays before moving.
+
+Shore service requires two actual fast shore lines. At the final anchorage, the on-screen objective shows actual chain paid out and the required amount:
+
+| Tender | Superyacht | Megayacht |
+| --- | --- | --- |
+| 13 m | 18 m | 27 m |
+
+Drop inside the marked circle, pay out at least the displayed amount, hold the chain, and settle for three seconds without dragging. There is no hidden backing-distance condition. Completing the goal starts a short pan and zoom before the mission result. Keep playing restores the previous camera. Reduced-motion mode shows the result without the automatic camera move.
 
 ## Development checks
 
