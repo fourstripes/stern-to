@@ -49,13 +49,15 @@ The core simulation runs at 60 Hz. Vessel dynamics, water sampling and navigatio
 | Choose anchors / drop / bring in or stop | Z / X / B |
 | Fenders | F |
 | Top / chase camera | T / V |
-| Pause / menu / restart | P / Escape / R |
+| Pause / close equipment or open menu / restart | P / Escape / R |
 
 Pointer and touch controls mirror these actions. Each engine slider and the rudder also support focused keyboard interaction. Momentary buttons accept held Enter or Space. The game pauses when its page becomes hidden; press Play when returning.
 
-Anchors, Lines and Fenders start collapsed. Tap a heading to show its controls, or tap it again to close them; only one section opens at a time. Closing a section leaves deployed equipment in place and stops its held hauling controls. Small status labels keep active equipment visible while the sections are closed. Fenders can be selected directly as stowed, port, starboard or both.
+Anchors, Lines and Fenders share one compact toolbar and start closed. Tap a button to open its card, or tap it again to close; only one card opens at a time. Lines uses six named buttons with separate state indicators and one action row. Closing a card leaves deployed equipment in place and stops its held hauling controls. Small toolbar status labels keep active equipment visible while closed. Fenders can be selected directly as stowed, port, starboard or both.
 
-The Anchors panel keeps its selector, Drop, Bring in and chain controls together. Choose Port, Starboard or Both; the tender has one Bow anchor. Drop lowers the selected missing anchors with 3 m of chain and holds automatically. Tap − or + for one metre, or hold to adjust continuously. Bring in retrieves the selected anchors over time and changes to Stop while retrieving. Both applies to both selected anchors; changing selection does not move or remove equipment. The Lines panel has its own separate actions. All stop selects neutral; use astern thrust to brake the boat's momentum.
+The equipment cards fit without an internal scroll area. On short landscape screens they use the space beside the helm, with the helm on the opposite side. A layout change releases momentary touches before controls move, while latched throttle stays set. Escape closes an open equipment card before opening the main menu.
+
+The Anchors panel keeps its selector, Drop, Bring in and chain controls together. Choose Port, Starboard or Both; the tender has one Bow anchor. Drop lowers the selected missing anchors with 3 m of chain and holds automatically. Tap − or + for one metre, or hold to adjust continuously. Bring in retrieves the selected anchors over time and changes to Stop while retrieving. Both applies to both selected anchors; changing selection does not move or remove equipment. The rendered chain and anchor shackle share the hull's anchor socket and remain connected through vessel movement, dropping and retrieval. The Lines panel has its own separate actions. All stop selects neutral; use astern thrust to brake the boat's momentum.
 
 ## Mission navigation and the final anchorage
 

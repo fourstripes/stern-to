@@ -144,8 +144,8 @@ test('H, J and G always operate shore lines while anchor selection and retrieval
   assert.equal(h.read('lines[0].state'),'stowed');assert.equal(h.read('S.anchors[0].weighing'),true);assert.equal(h.read('S.anchors.length'),2);
 });
 
-test('opening a different mooring section resets scroll while keeping the selector and equipment intact',t=>{
-  const h=fixture(t);rig(h);select(h,2);h.click('linesT');h.element('gLines').scrollTop=100;
-  h.click('anchorsT');assert.equal(h.element('gLines').scrollTop,0);assert.equal(h.element('anchSel').value,'2');assert.deepEqual(lengths(h),[20,30]);
+test('switching equipment cards preserves anchor selection and gear until a new game',t=>{
+  const h=fixture(t);rig(h);select(h,2);h.click('linesT');
+  h.click('anchorsT');assert.equal(h.element('anchSel').value,'2');assert.deepEqual(lengths(h),[20,30]);
   h.click('anchorsT');h.click('go');assert.equal(h.read('mooringSection'),null);assert.equal(h.read('S.anchors.length'),0);
 });

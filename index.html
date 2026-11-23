@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="modulepreload" href="vendor/three.module.min.js">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="assets/game.css?v=20261123-counter">
+<link rel="stylesheet" href="assets/game.css?v=20261123-mooring">
 </head>
 <body>
 <section id="startup" class="startup" role="status" aria-live="polite" aria-atomic="true">
@@ -57,49 +57,50 @@
       </div>
   </section>
     <section class="g g-lines c-tr" id="gLines" aria-label="Mooring">
-      <div class="mooring-tools"><span>Mooring</span><button class="lt" id="cornerBtn" title="Move this panel to another corner" aria-label="Move this panel to another corner">⤡</button></div>
-      <div class="mooring-section">
+      <div class="mooring-toolbar" role="group" aria-label="Equipment controls">
         <button class="btn mooring-toggle" id="anchorsT" aria-controls="anchorBody" aria-expanded="false"><span class="mooring-label">Anchors</span><span class="mooring-status" id="anchorsStatus"></span></button>
+        <button class="btn mooring-toggle" id="linesT" aria-controls="lnBody" aria-expanded="false"><span class="mooring-label">Lines</span><span class="mooring-status" id="linesStatus"></span></button>
+        <button class="btn mooring-toggle" id="fendersT" aria-controls="fenderBody" aria-expanded="false"><span class="mooring-label">Fenders</span><span class="mooring-status" id="fendersStatus"></span></button>
+        <button class="btn" id="cornerBtn" title="Move this panel to another corner" aria-label="Move this panel to another corner">⤡</button>
+      </div>
         <div class="mooring-panel" id="anchorBody" role="group" aria-labelledby="anchorsT" hidden>
-          <label class="sr-only" for="anchSel">Choose anchors</label>
-          <select class="btn anchor-select" id="anchSel"><option value="0">Port</option><option value="1">Starboard</option><option value="2">Both</option></select>
-          <div class="anchor-actions"><button class="btn" id="anchDrop">Drop</button><button class="btn" id="anchWeigh" disabled>Bring in</button></div>
-          <span class="anchor-chain-label" id="chainLabel">Chain out (m)</span>
-          <div class="pair" id="chainRow" role="group" aria-labelledby="chainLabel">
-            <button class="btn" id="chIn" title="Bring in 1 m; hold to continue" aria-label="Bring in chain: tap 1 metre or hold" disabled>−</button>
-            <output id="anchorChain" aria-label="Selected anchor chain out in metres">0.0</output>
-            <button class="btn" id="chOut" title="Pay out 1 m; hold to continue" aria-label="Pay out chain: tap 1 metre or hold" disabled>+</button>
+          <div class="anchor-primary">
+            <label class="sr-only" for="anchSel">Choose anchors</label>
+            <select class="btn anchor-select" id="anchSel"><option value="0">Port</option><option value="1">Starboard</option><option value="2">Both</option></select>
+            <div class="anchor-actions"><button class="btn" id="anchDrop">Drop</button><button class="btn" id="anchWeigh" disabled>Bring in</button></div>
+          </div>
+          <div class="anchor-chain-control">
+            <span class="anchor-chain-label" id="chainLabel">Chain out (m)</span>
+            <div class="pair" id="chainRow" role="group" aria-labelledby="chainLabel">
+              <button class="btn" id="chIn" title="Bring in 1 m; hold to continue" aria-label="Bring in chain: tap 1 metre or hold" disabled>−</button>
+              <output id="anchorChain" aria-label="Selected anchor chain out in metres">0.0</output>
+              <button class="btn" id="chOut" title="Pay out 1 m; hold to continue" aria-label="Pay out chain: tap 1 metre or hold" disabled>+</button>
+            </div>
           </div>
           <span class="lt" id="scopeTx" role="status">Stowed</span>
           <section id="anchorGoal" class="anchor-goal" aria-label="Final anchorage objective" hidden>
-            <div class="eyebrow">Final anchorage</div>
-            <div class="anchor-readout"><span>Target</span><strong><span id="anchorNeed">18</span> m</strong></div>
+            <div class="anchor-readout"><span class="eyebrow">Final anchorage</span><strong>Target <span id="anchorNeed">18</span> m</strong></div>
             <div id="anchorProgress" class="anchor-progress" role="progressbar" aria-label="Anchorage chain paid out" aria-valuemin="0" aria-valuemax="18" aria-valuenow="0"><i></i></div>
             <p id="anchorHint" role="status">Drop an anchor inside the ring.</p>
           </section>
         </div>
-      </div>
-      <div class="mooring-section">
-        <button class="btn mooring-toggle" id="linesT" aria-controls="lnBody" aria-expanded="false"><span class="mooring-label">Lines</span><span class="mooring-status" id="linesStatus"></span></button>
         <div class="mooring-panel" id="lnBody" role="group" aria-labelledby="linesT" hidden>
-          <div class="shipwrap"><div class="ship" id="shipBox">
-            <svg viewBox="0 0 56 128" preserveAspectRatio="none" aria-hidden="true"><path d="M28 3C42 22 48 40 48 62L46 120Q46 125 41 125L15 125Q10 125 10 120L8 62C8 40 14 22 28 3Z"/></svg>
-            <button class="ln" data-i="0" aria-label="Port bow line"></button>
-            <button class="ln" data-i="1" aria-label="Starboard bow line"></button>
-            <button class="ln" data-i="2" aria-label="Port stern line"></button>
-            <button class="ln" data-i="3" aria-label="Starboard stern line"></button>
-            <button class="ln sp" data-i="4" aria-label="Forward spring"></button>
-            <button class="ln sp" data-i="5" aria-label="Aft spring"></button>
-          </div></div>
-          <div id="actBox" hidden><span class="lt" id="actName">Line</span><div class="meter" title="Line tension"><i id="actFill"></i></div><button class="btn" id="hvBtn">Heave in</button><button class="btn" id="slBtn">Slack</button><button class="btn" id="lgBtn">Let go</button></div>
+          <div class="line-grid" id="shipBox">
+            <button class="ln" data-i="0" aria-label="Port bow line" aria-pressed="false"><span class="line-label">Port bow</span><span class="line-state" aria-hidden="true"></span></button>
+            <button class="ln" data-i="1" aria-label="Starboard bow line" aria-pressed="false"><span class="line-label">Stbd bow</span><span class="line-state" aria-hidden="true"></span></button>
+            <button class="ln" data-i="2" aria-label="Port stern line" aria-pressed="false"><span class="line-label">Port stern</span><span class="line-state" aria-hidden="true"></span></button>
+            <button class="ln" data-i="3" aria-label="Starboard stern line" aria-pressed="false"><span class="line-label">Stbd stern</span><span class="line-state" aria-hidden="true"></span></button>
+            <button class="ln sp" data-i="4" aria-label="Forward spring" aria-pressed="false"><span class="line-label">Fwd spring</span><span class="line-state" aria-hidden="true"></span></button>
+            <button class="ln sp" data-i="5" aria-label="Aft spring" aria-pressed="false"><span class="line-label">Aft spring</span><span class="line-state" aria-hidden="true"></span></button>
+          </div>
+          <div id="actBox" hidden>
+            <div class="line-tension"><span class="lt" id="actName">All lines</span><div class="meter" title="Line tension"><i id="actFill"></i></div></div>
+            <div class="line-actions"><button class="btn" id="hvBtn">Heave in</button><button class="btn" id="slBtn">Slack</button><button class="btn" id="lgBtn">Let go</button></div>
+          </div>
         </div>
-      </div>
-      <div class="mooring-section">
-        <button class="btn mooring-toggle" id="fendersT" aria-controls="fenderBody" aria-expanded="false"><span class="mooring-label">Fenders</span><span class="mooring-status" id="fendersStatus"></span></button>
         <div class="mooring-panel" id="fenderBody" role="group" aria-labelledby="fendersT" hidden>
           <div class="fender-options"><button class="btn" data-fender="0" aria-pressed="true">Stowed</button><button class="btn" data-fender="1" aria-pressed="false">Port</button><button class="btn" data-fender="2" aria-pressed="false">Starboard</button><button class="btn" data-fender="3" aria-pressed="false">Both</button></div>
         </div>
-      </div>
     </section>
 
   <div id="fade"></div>
@@ -136,16 +137,16 @@
         <div><kbd>Z</kbd> choose anchors · <kbd>X</kbd> drop · <kbd>B</kbd> bring in / stop</div>
         <div><kbd>F</kbd> fenders</div>
         <div><kbd>T</kbd> top view · <kbd>V</kbd> chase camera</div>
-        <div><kbd>P</kbd> pause · <kbd>Esc</kbd> menu</div>
+        <div><kbd>P</kbd> pause · <kbd>Esc</kbd> close controls / menu</div>
         <div><kbd>Drag</kbd> orbit · <kbd>Wheel</kbd> zoom · <kbd>[</kbd><kbd>]</kbd> rotate</div>
       </div>
       <ul class="touchhint">
         <li>Slide the red and green levers for the engines; hold AHD or AST for a gentle bump. All stop brings both to neutral.</li>
         <li>Hold ◀ or ▶ for the bow thruster.</li>
         <li>One finger on the water orbits the camera; two fingers twist and pinch.</li>
-        <li>Tap Anchors, Lines or Fenders to open those controls. Tap the same heading again to close them.</li>
+        <li>Tap Anchors, Lines or Fenders to open a compact card. Tap the same button again to close it.</li>
         <li>In Anchors, choose Port, Starboard or Both, then Drop. Tap − or + for one metre of chain, or hold to continue. Bring in retrieves the selected anchors; Stop pauses retrieval.</li>
-        <li>Tap a line on the Lines panel to throw it, then hold Heave in or Slack. They work every line unless you tap one to single it out.</li>
+        <li>Tap a named line button to throw it, then hold Heave in or Slack. These actions work every line unless you tap one to single it out.</li>
       </ul>
       <h3 class="eyebrow">Harbour navigation</h3>
       <ul class="touchhint">
@@ -178,7 +179,7 @@
   </div>
 </div>
 
-<script type="module" src="src/main.js?v=20261123-counter"></script>
+<script type="module" src="src/main.js?v=20261123-mooring"></script>
 
 
 </body>

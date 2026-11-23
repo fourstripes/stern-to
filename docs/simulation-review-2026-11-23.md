@@ -48,6 +48,10 @@ The selected-chain readout shows actual chain to one decimal place without round
 
 The compact anchor controls use one Port/Starboard/Both selector, Drop, Bring in/Stop and −/+. A drop starts with 3 m of automatically held chain. Each tap adjusts one metre; a sustained hold continues adjustment. The tender has a single Bow option. Line actions remain in Lines, and changing the operation selector does not change which anchor can qualify for the mission.
 
+The mooring controls now use a single equipment toolbar with one compact card at a time. Named line buttons replace the tall vessel diagram, and line actions sit together. Short landscape screens place the equipment card beside the helm rather than stacking their heights. The panel has no internal scroll area. Line labels remain visible when status or selection changes.
+
+The previously detached anchor chain used a different origin from the hull pocket and stowed anchor. A shared socket on the scaled pocket surface now meets the anchor's actual shackle, including through heel, pitch, dropping and retrieval. The existing 220-link instanced pool is retained; each side receives a budget and draws from the hull downward, so a capacity limit cannot detach the visible chain from the hull. Geometry tests cover all three vessels and buffer reuse without changing physical anchor forces.
+
 Success starts a 4.5-second camera pan and zoom, then displays the mission result. Controls are temporarily held during the reveal, and Keep playing restores the prior camera. Reduced-motion preference skips the automatic camera movement.
 
 ## Navigation and traffic
