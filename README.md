@@ -49,6 +49,8 @@ Game code is organised by named sections and functions. The boat handling coeffi
 
 Pointer and touch controls mirror these actions. Each engine slider and the rudder also support focused keyboard interaction. Momentary buttons accept held Enter or Space. The game pauses when its page becomes hidden; press Play when returning.
 
+Anchors, Lines and Fenders start collapsed. Tap a heading to show its controls, or tap it again to close them; only one section opens at a time. Closing a section leaves deployed equipment in place and stops its held hauling controls. Small status labels keep active equipment visible while the sections are closed. Fenders can be selected directly as stowed, port, starboard or both.
+
 ## Development checks
 
 Use Node.js 24.15 or later in the 24.x line, or Node.js 26+. Development dependencies do not load in the deployed game.

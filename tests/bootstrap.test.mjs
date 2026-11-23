@@ -11,7 +11,7 @@ async function bootstrap(load) {
   dom.window.__loadGame = load;
   dom.window.console.error = () => {};
   const source = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8')
-    .replace("await import('./game.js')", 'await __loadGame()');
+    .replace(/await import\('\.\/game\.js(?:\?[^']*)?'\)/, 'await __loadGame()');
   await vm.runInContext(`(async () => { ${source}\n })()`, dom.getInternalVMContext());
   return dom;
 }

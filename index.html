@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="modulepreload" href="vendor/three.module.min.js">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="assets/game.css?v=20261123-mobile">
+<link rel="stylesheet" href="assets/game.css?v=20261123-mooring">
 </head>
 <body>
 <section id="startup" class="startup" role="status" aria-live="polite" aria-atomic="true">
@@ -57,22 +57,35 @@
       </div>
   </section>
     <section class="g g-lines c-tr" id="gLines" aria-label="Mooring">
-      <div class="lnhead"><button class="lt" id="linesT" aria-controls="lnBody" aria-expanded="true">Lines ▾</button><button class="lt" id="cornerBtn" title="Move this panel to another corner" aria-label="Move this panel to another corner">⤡</button></div>
-      <div class="lnlist an2"><button class="btn" id="anchSel">Anchor · P</button><button class="btn" id="anchAct">Let go</button><div class="pair" id="chainRow" hidden><button class="btn" id="chIn" title="Heave the chain in" aria-label="Heave the chain in">−</button><button class="btn" id="chOut" title="Pay more chain out" aria-label="Pay more chain out">+</button></div><span class="lt" id="scopeTx" hidden></span></div>
-      <div id="lnBody">
-      <div class="anrow"><button class="anc" data-a="-1" aria-label="Port anchor"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M10.6 3h2.8v9.2h-2.8z M7 2.6h10v1.6H7z M5.2 12.6h13.6v2.4H5.2z M5.4 14.8l3 0 1.6 5.4-2.8.8z M18.6 14.8l-3 0-1.6 5.4 2.8.8z" fill="currentColor"/></svg></button><button class="anc" data-a="1" aria-label="Starboard anchor"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M10.6 3h2.8v9.2h-2.8z M7 2.6h10v1.6H7z M5.2 12.6h13.6v2.4H5.2z M5.4 14.8l3 0 1.6 5.4-2.8.8z M18.6 14.8l-3 0-1.6 5.4 2.8.8z" fill="currentColor"/></svg></button></div>
-      <div class="shipwrap"><div class="ship" id="shipBox">
-      <svg viewBox="0 0 56 128" preserveAspectRatio="none" aria-hidden="true"><path d="M28 3C42 22 48 40 48 62L46 120Q46 125 41 125L15 125Q10 125 10 120L8 62C8 40 14 22 28 3Z"/></svg>
-      <button class="ln" data-i="0" aria-label="Port bow line"></button>
-      <button class="ln" data-i="1" aria-label="Starboard bow line"></button>
-      <button class="ln" data-i="2" aria-label="Port stern line"></button>
-      <button class="ln" data-i="3" aria-label="Starboard stern line"></button>
-      <button class="ln sp" data-i="4" aria-label="Forward spring"></button>
-      <button class="ln sp" data-i="5" aria-label="Aft spring"></button>
-    </div></div>
+      <div class="mooring-tools"><span>Mooring</span><button class="lt" id="cornerBtn" title="Move this panel to another corner" aria-label="Move this panel to another corner">⤡</button></div>
+      <div class="mooring-section">
+        <button class="btn mooring-toggle" id="anchorsT" aria-controls="anchorBody" aria-expanded="false"><span class="mooring-label">Anchors</span><span class="mooring-status" id="anchorsStatus"></span></button>
+        <div class="mooring-panel" id="anchorBody" role="group" aria-labelledby="anchorsT" hidden>
+          <div class="lnlist an2"><button class="btn" id="anchSel">Anchor · P</button><button class="btn" id="anchAct">Let go</button><div class="pair" id="chainRow" hidden><button class="btn" id="chIn" title="Heave the chain in" aria-label="Heave the chain in">−</button><button class="btn" id="chOut" title="Pay more chain out" aria-label="Pay more chain out">+</button></div><span class="lt" id="scopeTx" hidden></span></div>
+          <div class="anrow"><button class="anc" data-a="-1" aria-label="Port anchor"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M10.6 3h2.8v9.2h-2.8z M7 2.6h10v1.6H7z M5.2 12.6h13.6v2.4H5.2z M5.4 14.8l3 0 1.6 5.4-2.8.8z M18.6 14.8l-3 0-1.6 5.4 2.8.8z" fill="currentColor"/></svg></button><button class="anc" data-a="1" aria-label="Starboard anchor"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M10.6 3h2.8v9.2h-2.8z M7 2.6h10v1.6H7z M5.2 12.6h13.6v2.4H5.2z M5.4 14.8l3 0 1.6 5.4-2.8.8z M18.6 14.8l-3 0-1.6 5.4 2.8.8z" fill="currentColor"/></svg></button></div>
+        </div>
       </div>
-      <div class="lnlist"><button class="btn" id="fendBtn">Fenders</button></div>
-      <div id="actBox" hidden><span class="lt" id="actName">Line</span><div class="meter" title="Line tension"><i id="actFill"></i></div><button class="btn" id="hvBtn">Heave in</button><button class="btn" id="slBtn">Slack</button><button class="btn" id="lgBtn">Let go</button></div>
+      <div class="mooring-section">
+        <button class="btn mooring-toggle" id="linesT" aria-controls="lnBody" aria-expanded="false"><span class="mooring-label">Lines</span><span class="mooring-status" id="linesStatus"></span></button>
+        <div class="mooring-panel" id="lnBody" role="group" aria-labelledby="linesT" hidden>
+          <div class="shipwrap"><div class="ship" id="shipBox">
+            <svg viewBox="0 0 56 128" preserveAspectRatio="none" aria-hidden="true"><path d="M28 3C42 22 48 40 48 62L46 120Q46 125 41 125L15 125Q10 125 10 120L8 62C8 40 14 22 28 3Z"/></svg>
+            <button class="ln" data-i="0" aria-label="Port bow line"></button>
+            <button class="ln" data-i="1" aria-label="Starboard bow line"></button>
+            <button class="ln" data-i="2" aria-label="Port stern line"></button>
+            <button class="ln" data-i="3" aria-label="Starboard stern line"></button>
+            <button class="ln sp" data-i="4" aria-label="Forward spring"></button>
+            <button class="ln sp" data-i="5" aria-label="Aft spring"></button>
+          </div></div>
+          <div id="actBox" hidden><span class="lt" id="actName">Line</span><div class="meter" title="Line tension"><i id="actFill"></i></div><button class="btn" id="hvBtn">Heave in</button><button class="btn" id="slBtn">Slack</button><button class="btn" id="lgBtn">Let go</button></div>
+        </div>
+      </div>
+      <div class="mooring-section">
+        <button class="btn mooring-toggle" id="fendersT" aria-controls="fenderBody" aria-expanded="false"><span class="mooring-label">Fenders</span><span class="mooring-status" id="fendersStatus"></span></button>
+        <div class="mooring-panel" id="fenderBody" role="group" aria-labelledby="fendersT" hidden>
+          <div class="fender-options"><button class="btn" data-fender="0" aria-pressed="true">Stowed</button><button class="btn" data-fender="1" aria-pressed="false">Port</button><button class="btn" data-fender="2" aria-pressed="false">Starboard</button><button class="btn" data-fender="3" aria-pressed="false">Both</button></div>
+        </div>
+      </div>
     </section>
 
   <div id="fade"></div>
@@ -116,6 +129,7 @@
         <li>Slide the red and green levers for the engines; hold AHD or AST for a gentle bump. All stop brings both to neutral.</li>
         <li>Hold ◀ or ▶ for the bow thruster.</li>
         <li>One finger on the water orbits the camera; two fingers twist and pinch.</li>
+        <li>Tap Anchors, Lines or Fenders to open those controls. Tap the same heading again to close them.</li>
         <li>Tap a line on the Lines panel to throw it, then hold Heave in or Slack. They work every line unless you tap one to single it out.</li>
       </ul>
       <button class="btn" id="minBtn" aria-pressed="false">Mirroring mode · off</button>
@@ -139,7 +153,7 @@
   </div>
 </div>
 
-<script type="module" src="src/main.js"></script>
+<script type="module" src="src/main.js?v=20261123-mooring"></script>
 
 
 </body>

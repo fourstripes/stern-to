@@ -12,7 +12,7 @@ test('the deployed page references existing local assets', async () => {
     if (/^https?:/.test(target)) continue;
     await access(new URL(target, root));
   }
-  assert.match(html, /<script type="module" src="src\/main.js"><\/script>/);
+  assert.match(html, /<script type="module" src="src\/main.js(?:\?[^\"]+)?"><\/script>/);
   assert.equal((html.match(/<body>/g) || []).length, 1);
   assert.equal((html.match(/<\/head>/g) || []).length, 1);
 });

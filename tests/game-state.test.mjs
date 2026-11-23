@@ -42,7 +42,7 @@ function game() {
     Math: math, Set, Map, console, $: element, clearTimeout() {},
     toast() {}, spawn() {}, spray() {}, wakeDrop() {},
     build3D() {}, buildSlipMarker() {}, resetVisuals() {},
-    releaseControls() {}, resetFrameClock() {}, condLabels() {},
+    releaseControls() {}, releaseMooringInputs() {}, setMooringSection() {}, updateMooringUI() {}, resetFrameClock() {}, condLabels() {},
     finish() {}, startNight() {}, shelter: () => 1
   });
   vm.runInContext(`
