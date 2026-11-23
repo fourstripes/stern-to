@@ -79,6 +79,16 @@ The initial mobile sea mesh has 55.6% fewer triangles, and the foam texture has 
 
 Current research reviewed included the May 2026 [Dynamic Wave Trains paper](https://doi.org/10.1111/cgf.70495), which supports spatially varying procedural waves. This release does not claim to implement that research solver. A shared analytic model suits the existing mobile game; adding a full bathymetry, shallow-water or fluid-volume solver would require a different scene and validation scope.
 
+## Shared play total
+
+The menu counter already used one shared server-side key, `sternto-dock-sim/plays`, through [Abacus](https://v2.jasoncameron.dev/abacus/). It was not a per-device count. Its previous page-lifetime guard counted only the first game started during each visit, omitting further games in the same tab.
+
+The label is now Total games played. Every successfully started game increments the same existing global counter, including restarts and retries. Loading the page, opening the menu, resuming and continuing voyage legs only display or refresh the total. No historical value is reset or estimated, and past omitted restarts cannot be reconstructed.
+
+Reads refresh on menu opening with a cooldown and in-flight deduplication. The exact formatted number is shared across players; it counts games rather than unique people. Invalid or older responses cannot reduce the displayed total. Failed or ambiguous increment requests are not automatically retried, avoiding accidental double counts. The counter remains a lightweight online total: failed requests can miss a play, and a service outage must not prevent gameplay. No browser identifier, cookie or account is needed by this integration. Production-origin checks exclude local and preview testing.
+
+A read-only production request returned the existing total with HTTP 200 and the required cross-origin response header for GitHub Pages. An observed 11-second response justified a 15-second asynchronous timeout. The validation did not issue a live increment or reset.
+
 ## Verification and limits
 
 - JavaScript syntax checks and the full Node test suite.
@@ -88,6 +98,7 @@ Current research reviewed included the May 2026 [Dynamic Wave Trains paper](http
 - Wave inversion and derivatives checked against independent numerical differences.
 - Heave, foam and gameplay timing checks across different display rates.
 - Resource lifecycle checks, CSS parsing and unique DOM identifiers.
+- Shared-counter tests using separate browser instances, new-game versus resume behaviour, stale replies and service failures, without incrementing the live counter.
 - Actual sea, sky, foam-fade and foam-stamp shader bodies compiled and linked with Three.js r187 chunk expansion in an OpenGL ES 3.2 Mesa 25 software context, with no compiler or linker messages.
 - Reproducible vendor bundle check and GitHub Actions release gates.
 

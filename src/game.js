@@ -1889,25 +1889,39 @@ function jumpStage(k){
   const pv=stops[k-1].slip;S.stage=k;setStop(k);S.x=pv.x;S.y=pv.y;S.psi=pv.h;S.u=S.v=S.r=0;S.legT0=S.t;cam.x=S.x;cam.y=S.y;mooredStart();
   toast(stops[k-1].done+' · next: '+stops[k].name+' · let go and follow the arrow',3200);
 }
-/* play count: a free public counter (abacus.jasoncameron.dev), one count per visit on the live site; hidden if it cannot be reached */
-const PLAYS_URL='https://abacus.jasoncameron.dev/',PLAYS_KEY='sternto-dock-sim/plays';let playsCounted=false,displayedPlays=-1;
+/* Shared public total: one count per successful new game; reads never increment. */
+const PLAYS_URL='https://abacus.jasoncameron.dev/',PLAYS_KEY='sternto-dock-sim/plays';let displayedPlays=-1,playsReadPending=null,playsLastRead=-Infinity;
 function showPlays(n){
   if(!Number.isSafeInteger(n)||n<0||n<displayedPlays)return;displayedPlays=n;
-  $('playsN').textContent=n>=1e4?(n/1e3).toFixed(n>=1e5?0:1)+'k':n.toLocaleString('en-AU');$('plays').hidden=false;
+  $('playsN').textContent=n.toLocaleString('en-AU');$('plays').hidden=false;
   invalidateFrame();
 }
-async function plays(op){
-  if(location.origin!=='https://fourstripes.github.io'||!/^\/stern-to\/(?:index\.html)?$/.test(location.pathname))return;
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),6000);
-  try{const response=await fetch(PLAYS_URL+op+'/'+PLAYS_KEY,{cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});if(response.ok){const data=await response.json();showPlays(data.value);}}
-  catch{}finally{clearTimeout(timeout);}
+function plays(op){
+  if(location.origin!=='https://fourstripes.github.io'||!/^\/stern-to\/(?:index\.html)?$/.test(location.pathname)||!['get','hit'].includes(op))return;
+  if(op==='get'){
+    if(playsReadPending)return playsReadPending;
+    if(performance.now()-playsLastRead<5000)return;
+    playsLastRead=performance.now();
+  }
+  if(displayedPlays<0&&!$('playsN').textContent){$('playsN').textContent='Loading…';$('plays').hidden=false;}
+  const request=(async()=>{
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
+    try{
+      const response=await fetch(PLAYS_URL+op+'/'+PLAYS_KEY,{cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});
+      if(!response.ok)throw new Error('Counter unavailable');
+      const data=await response.json();if(!Number.isSafeInteger(data.value)||data.value<0)throw new Error('Invalid counter value');showPlays(data.value);
+    }catch{if(displayedPlays<0){$('playsN').textContent='Unavailable';$('plays').hidden=false;invalidateFrame();}}
+    finally{clearTimeout(timeout);}
+  })();
+  if(op==='get'){playsReadPending=request;request.finally(()=>{playsReadPending=null;});}
+  return request;
 }
 plays('get');
 function start(){
-  if(!playsCounted){playsCounted=true;plays('hit');}releaseControls();paused=false;
+  releaseControls();paused=false;
   camOff.x=camOff.y=0;$('menu').hidden=true;$('help').hidden=true;$('result').hidden=true;
   reset();state='play';acc=0;setPaused(false,false);refreshModalState(glc);
-  toast(LV.sub,3200);if(stops&&missionStart>0)jumpStage(missionStart);syncWakeLock();invalidateFrame();
+  toast(LV.sub,3200);if(stops&&missionStart>0)jumpStage(missionStart);syncWakeLock();invalidateFrame();plays('hit');
 }
 let paused=false,hold=false;
 function setPaused(value,announce=true){
@@ -1918,7 +1932,7 @@ function togglePause(){if(state==='play')setPaused(!hold);}
 function openMenu(){
   if(state==='play'){paused=true;menuReturnFocus=document.activeElement;}releaseControls();state='menu';
   $('result').hidden=true;$('help').hidden=true;$('menu').hidden=false;$('resume').hidden=!paused;$('go').classList.toggle('hot',!paused);
-  refreshModalState();syncWakeLock();invalidateFrame();
+  refreshModalState();syncWakeLock();invalidateFrame();plays('get');
 }
 function resume(){if(!paused)return;releaseControls();paused=false;state='play';resetFrameClock();$('menu').hidden=true;$('help').hidden=true;refreshModalState();syncWakeLock();invalidateFrame();}
 function setSide(left){$('dock').classList.toggle('left',left);app.classList.toggle('dl',left);try{localStorage.setItem('sternto-dock',left?'l':'r');}catch(e){}}
