@@ -1453,7 +1453,7 @@ function sync3D(dt){
 const PTS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const pt=d=>PTS[Math.round(d/22.5)%16];
 const lat=v=>Math.abs(v)<.05?'0.0':(v<0?'◀\uFE0E ':'')+Math.abs(v).toFixed(1)+(v>0?' ▶\uFE0E':'');
-const lv=[$('lvP'),$('lvS')],LV_TRACK=lv.map(e=>e.querySelector('.track')),LV_K=lv.map(e=>e.querySelector('.knob')),LV_R=lv.map(e=>e.querySelector('.rpm')),LV_V=lv.map(e=>e.querySelector('.val')),FEND_BTNS=[...document.querySelectorAll('[data-fender]')],ACT_METER=$('actBox').querySelector('.meter'),RUD_G=document.querySelector('.dock .rudrow svg'),lnBtns=[...document.querySelectorAll('.ln')],hullMeter=document.querySelector('.dmg');
+const lv=[$('lvP'),$('lvS')],LV_TRACK=lv.map(e=>e.querySelector('.track')),LV_K=lv.map(e=>e.querySelector('.knob')),LV_R=lv.map(e=>e.querySelector('.rpm')),LV_V=lv.map(e=>e.querySelector('.val')),FEND_BTNS=[...document.querySelectorAll('[data-fender]')],ANCH_BTNS=[...document.querySelectorAll('[data-anchor]')],ACT_METER=$('actBox').querySelector('.meter'),RUD_G=document.querySelector('.dock .rudrow svg'),lnBtns=[...document.querySelectorAll('.ln')],hullMeter=document.querySelector('.dmg');
 let hudKey='';
 function hudFast(){
   const key=S.lever[0]+'|'+S.lever[1]+'|'+S.rpm[0].toFixed(3)+'|'+S.rpm[1].toFixed(3)+'|'+S.thr+'|'+S.rud+'|'+sync;if(key===hudKey)return;hudKey=key;
@@ -1489,13 +1489,34 @@ function updateMooringUI(){
     const cls='ln'+(i>3?' sp':'')+(st==='throw'||st==='haul'?' t':st==='fast'?' f':'')+(sel===i?' sel':''),tx=st==='fast'?'✓':st==='stowed'?'+':'…',mark=b.querySelector('.line-state');
     if(b.className!==cls)b.className=cls;if(mark&&mark.textContent!==tx)mark.textContent=tx;
     b.setAttribute('aria-pressed',String(sel===i));b.setAttribute('aria-label',LINE_DEF[i][0]+' line: '+(st==='fast'?'made fast':st==='stowed'?'stowed':'working')+(sel===i?', selected':''));});
-  for(const button of FEND_BTNS){const chosen=+button.dataset.fender===S.fend;button.classList.toggle('on',chosen);button.setAttribute('aria-pressed',String(chosen));}
+  for(const button of FEND_BTNS){
+    const value=+button.dataset.fender,side=value===1||value===2,chosen=side?!!(S.fend&value):value===S.fend;
+    button.classList.toggle('on',chosen);button.setAttribute('aria-pressed',String(chosen));
+    if(!side)continue;
+    const index=value===1?0:1,n=S.fendN[index],working=Math.abs(n-(chosen?4:0))>.001,count=fendOK(index);
+    const mark=button.querySelector('.equipment-state'),text=count||working?count+'/4':'In';
+    if(mark&&mark.textContent!==text)mark.textContent=text;
+    button.classList.toggle('deployed',count>0);button.classList.toggle('working',working);
+    button.setAttribute('aria-label',(index?'Starboard':'Port')+' fenders: '+count+' of 4 out'+(working?', '+(chosen?'rigging':'stowing'):''));
+  }
   const out=lines.filter(l=>l.state!=='stowed'),fast=out.filter(l=>l.state==='fast'),a=S.anchors[0];
   const statuses={anchors:S.anchorCmd?'Working':S.anchors.some(a=>a.weighing)?'Weighing':S.anchors.length>1?'Both':a?(a.side<0?'Port':a.side>0?'Starboard':'Bow'):'',lines:out.length?out.length+' '+(fast.length===out.length?'fast':'out'):'',fenders:FENDL[S.fend]||(S.fendN.some(n=>n>0)?'Stowing':'')};
   for(const section of ['anchors','lines','fenders']){const text=statuses[section],status=$(section+'Status');if(status.textContent!==text)status.textContent=text;$(section+'T').classList.toggle('has-equipment',!!text);}
-  {const select=$('anchSel'),tender=shipId==='tender',mode=tender?'bow':'paired';
-    if(select.dataset.mode!==mode){select.replaceChildren(...(tender?['Bow']:['Port','Starboard','Both']).map((label,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=label;return option;}));select.dataset.mode=mode;}
-    select.value=String(tender?0:S.anchSel);
+  {const diagram=$('anchorDiagram'),tender=shipId==='tender',mode=tender?'bow':'paired';
+    if(diagram.dataset.mode!==mode)diagram.dataset.mode=mode;
+    for(const button of ANCH_BTNS){
+      const value=+button.dataset.anchor,chosen=tender?value===0:S.anchSel===2||S.anchSel===value;
+      button.hidden=button.disabled=tender&&value!==0;
+      button.classList.toggle('on',chosen);button.setAttribute('aria-pressed',String(chosen));
+      if(value===2)continue;
+      const side=tender?0:value===0?-1:1,A=S.anchors.find(anchor=>anchor.side===side),pending=(S.dropSides||[]).includes(side),working=pending||!!A?.weighing;
+      const label=button.querySelector('.equipment-label'),name=tender?'Bow':value===0?'Port':'Starboard';
+      if(value===0&&label&&label.textContent!==name)label.textContent=name;
+      const mark=button.querySelector('.equipment-state'),text=working?'…':A?.drag?'!':A?'Out':'In';
+      if(mark&&mark.textContent!==text)mark.textContent=text;
+      button.classList.toggle('deployed',!!A);button.classList.toggle('working',working);button.classList.toggle('dragging',!!A?.drag);
+      button.setAttribute('aria-label',name+' anchor: '+(pending?'preparing':A?.weighing?'bringing in':A?.drag?'dragging':A?.set?'holding':A?'down':'stowed'));
+    }
     const sides=anchSides(),anchors=selectedAnchors(),pending=(S.dropSides||[]).filter(sd=>sides.includes(sd)),retrieving=anchors.some(a=>a.weighing);
     const drop=$('anchDrop'),weigh=$('anchWeigh');drop.disabled=!sides.some(sd=>!S.anchors.some(a=>a.side===sd)&&!pending.includes(sd));
     const dropText=pending.length?'Drop…':'Drop';if(drop.textContent!==dropText)drop.textContent=dropText;
@@ -1783,7 +1804,8 @@ const allStop=()=>{
   bumpOwned.fill(false);S.lever=[0,0];
 }; // engines only; the rudder stays where it is (Midships centres it)
 $('stop').onclick=allStop;$('syncBtn').onclick=toggleSync;
-FEND_BTNS.forEach(button=>button.onclick=()=>setFenders(+button.dataset.fender));$('anchSel').onchange=()=>setAnchorSelection(+$('anchSel').value);
+FEND_BTNS.forEach(button=>button.onclick=()=>{const value=+button.dataset.fender;setFenders(value===1||value===2?S.fend^value:value);});
+ANCH_BTNS.forEach(button=>button.onclick=()=>setAnchorSelection(+button.dataset.anchor));
 [['chIn',1],['chOut',-1]].forEach(([id,d])=>bindChainButton($(id),d));
 $('anchDrop').onclick=dropAnchors;$('anchWeigh').onclick=bringInAnchors;
 const actionTargetReady=()=>mooringSection==='lines'&&lines.some(l=>l.state==='fast');
