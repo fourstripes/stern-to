@@ -32,7 +32,7 @@ Open `http://127.0.0.1:8080/` in a current browser with WebGL 2 enabled. The ES 
 | `docs/review-2026-11-23.md` | Review decisions, verification and remaining visual release check |
 | `docs/simulation-review-2026-11-23.md` | Physics calibration, water and traffic changes, anchorage rules and validation |
 
-The core simulation runs at 60 Hz. Vessel dynamics, water sampling and navigation are small modules that can be checked without a browser. The three hulls have distinct calibrated handling; the existing harbours and four-stop mission remain.
+The core simulation runs at 60 Hz. Vessel dynamics, water sampling and navigation are small modules that can be checked without a browser. The three hulls have distinct calibrated handling; the existing harbours and four-stop mission remain. The twin screws turn outward, so a propeller going astern walks the stern sideways and adds to a split-engine twist. The yachts heel outward in a hard turn and trim slightly by the stern near hull speed; the planing tender banks into its turns and lifts its bow over the hump before settling on the plane. Bow-wave foam spreads along the Kelvin angle, and the wake's crest spacing grows with speed.
 
 ## Controls
 

@@ -37,6 +37,15 @@ export function vesselForces(model, state) {
     - model.yawLinear * r - model.yawQuadratic * r * Math.abs(r)
     - model.yawSurge * Math.abs(u) * r;
 
+  // Prop walk from outward-turning twin screws. A propeller going astern walks the
+  // stern sideways: the port (left-handed) screw to starboard, the starboard screw
+  // to port. Both astern cancel; one ahead and one astern adds to the twisting
+  // couple. It is strongest from rest or making sternway and fades with headway.
+  const walkFade = clamp(1 - Math.max(0, u) / 3, .2, 1);
+  const walk = .045 * walkFade * (Math.max(-port, 0) - Math.max(-starboard, 0));
+  Y += walk;
+  N += model.rudderArm * walk;
+
   // Resolve the local flow normal to the rudder, including stern motion.
   // Without prop wash, F dot velocity is always <= 0. The induced axial drag
   // prevents a rudder from creating energy while it turns a coasting boat.

@@ -1,6 +1,6 @@
 import * as T3 from '../vendor/three.module.min.js';
 import { FIXED_STEP, MAX_FRAME_TIME, planSimulationSteps, renderPixelRatio, AdaptiveQuality } from './runtime.js';
-import { createVesselPhysics, vesselForces, bodyAcceleration, resolveContact } from './physics.js?v=20261123-simulation';
+import { createVesselPhysics, vesselForces, bodyAcceleration, resolveContact } from './physics.js?v=20261124-propwalk';
 import { planTrafficStep, planWaterRoute, segmentClear, navigationAdvice } from './navigation.js?v=20261123-simulation';
 import { buildWaves, sampleWater, stepDampedSpring, foamParameters, waterQuality, WATER_GLSL } from './water.js?v=20261123-simulation';
 
@@ -492,11 +492,15 @@ function step(dt){
   }
   const sp=Math.hypot(u,v);
   if(sp>.3){
+    /* once a planing hull is up on the plane its bow lifts clear, so the bow wave thins out */
+    const bowK=shipId==='tender'?1-.7*clamp((u/Math.sqrt(9.81*LEN)-.6)/.5,0,1):1;
     for(let sd2=-1;sd2<=1;sd2+=2){
-      for(let j=cnt(sp*12*dt);j--;)emit(1,23.5+rnd(-2.5,.5),sd2*1.2,-u*.15,sd2*(1.2+sp*.85)*rnd(.6,1.2),.4+sp*.1,rnd(1.6,3),.35);
+      for(let j=cnt(sp*12*bowK*dt);j--;)emit(1,23.5+rnd(-2.5,.5),sd2*1.2,-u*.15,sd2*(.6+sp*.4)*rnd(.7,1.15),.4+sp*.1,rnd(1.6,3),.35); /* bow-wave foam spreads out along the Kelvin arm, about 0.35-0.4 x speed */
       for(let j=cnt(sp*2*dt);j--;)emit(1,rnd(-24,16),sd2*4.75,-u*.1,sd2*rnd(.05,.25),.32,rnd(.6,1.2),.12);
     }
     for(let j=cnt(Math.abs(u)*20*dt);j--;)emit(0,u>0?-25.5:24,rnd(-3.8,3.8),-u*.25,0,2.4,rnd(8,14),.6);
+    /* a planing hull leaves a broad white trail where the hull and props have thrown the water up */
+    if(shipId==='tender'&&u>5){const k=clamp((u-5)/8,0,1);for(let j=cnt(k*55*dt);j--;)emit(1,-26+rnd(-1,1),rnd(-3.6,3.6),-u*.12,rnd(-.7,.7),rnd(2,3.2),rnd(2.5,4.5),.45);}
   }
   if(sp>1.1){const k=Math.min(1,(sp-1.1)/3);
     for(let sd2=-1;sd2<=1;sd2+=2){
@@ -686,7 +690,12 @@ float hullH(vec2 p){
   float lx=dot(d,uShip.zw),ly=dot(d,vec2(-uShip.w,uShip.z)),U=uHull.z,V=uHull.w,sc=clamp(L/25.,.35,1.),fw=U<0.?-1.:1.;
   float back=(fw*L-lx)*fw;
   float h=min(.5,.03*U*U)*sc*exp(-SQ((back+1.)/(4.5*sc))-SQ(ly/(B*1.6)));
-  h+=min(.28,.018*U*U)*sc*exp(-SQ((abs(ly)-B*.8-.34*back)/(2.4*sc)))*smoothstep(0.,8.*sc,back)*exp(-back/(L*2.4))*cos(back*1.25/sc);
+  /* Kelvin wake: divergent arms at 19.5 deg (tan .354) that close up above a length Froude number of 0.5,
+     crest spacing growing with speed squared, and a soft transverse train inside the wedge astern */
+  float U2=max(U*U,1.5),frL=abs(U)/sqrt(19.62*L),wedge=.354*min(1.,.5/max(frL,.01));
+  h+=min(.28,.018*U*U)*sc*exp(-SQ((abs(ly)-B*.8-wedge*back)/(2.4*sc)))*smoothstep(0.,8.*sc,back)*exp(-back/(L*2.4))*(.75*cos(back*14.7/U2)+.45*cos(back*1.25/sc));
+  float sb=back-2.*L;
+  if(sb>0.)h+=min(.1,.005*U*U)*sc*cos(sb*9.81/U2)*smoothstep(0.,5.*sc,sb)*exp(-sb/(L*2.5))*(1.-smoothstep(.6,1.,abs(ly)/max(B,wedge*back)));
   float sv=V<0.?-1.:1.;
   h+=min(.3,.45*V*V)*sc*exp(-SQ((ly-sv*(B+1.2*sc))/(2.2*sc)))*(1.-smoothstep(L*.6,L*1.1,abs(lx)));
   float pc=uProp.x>0.?-L-4.*sc:-L+7.*sc;
@@ -1361,7 +1370,12 @@ function sync3D(dt){
   // heel in the turn, trim with the throttle, and a lurch when she hits something
   ownDyn.acc+=((S.u-ownDyn.pu)/Math.max(dt,.001)-ownDyn.acc)*(1-Math.exp(-dt*3));ownDyn.pu=S.u;
   if(S.kick){ownDyn.vrx+=(Math.random()<.5?-1:1)*Math.min(.25,S.kick*.12);ownDyn.vrz-=.04*Math.min(2,S.kick);S.kick=0;}
-  const heel=clamp(S.u*S.r*.5,-.09,.09),trim=clamp(ownDyn.acc*.03,-.04,.04)+(shipId==='tender'?Math.min(.08,Math.max(0,S.u)*.011):0);
+  /* Displacement yachts heel outward in a turn (centripetal load below a high centre of gravity) and trim a little
+     by the stern as they approach hull speed. The planing tender banks into its turns, and lifts its bow over the
+     hump before settling flatter once it is on the plane. */
+  const fr=Math.max(0,S.u)/Math.sqrt(9.81*LEN),ac=S.u*S.r,ss=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
+  const heel=shipId==='tender'?-clamp(ac*.05,-.14,.14):clamp(ac*.055,-.07,.07);
+  const trim=clamp(ownDyn.acc*.03,-.04,.04)+(shipId==='tender'?.09*ss(.2,.5,fr)*(1-.55*ss(.55,1,fr)):.012*ss(.12,.4,fr));
   if(!isFinite(ownDyn.y+ownDyn.rx+ownDyn.rz+ownDyn.acc))Object.assign(ownDyn,newDyn());
   pose(own,ownDyn,RX,RY,RP,LEN,BEAM,S.roll*.6+heel-(S.listV||0),trim,dt);
   if(ownModel&&ownModel.userData.radar)ownModel.userData.radar.rotation.y+=dt*2.6;
