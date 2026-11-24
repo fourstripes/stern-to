@@ -36,7 +36,7 @@ function failed(error) {
 retry.addEventListener('click', () => location.reload());
 
 try {
-  const { startGame } = await import('./game.js?v=20261124-chain');
+  const { startGame } = await import('./game.js?v=20261124-nightchain');
   startGame({
     onReady: ready,
     onError: failed,

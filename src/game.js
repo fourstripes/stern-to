@@ -1019,6 +1019,9 @@ const ropes=[0,1,2,3,4,5].map(mkRope),leads=[0,1,2,3,4,5].map(mkRope);
 const whip=[mkRope(),mkRope()];whip.forEach(w=>w.material=ropeRed);
 const chainM=mkRope(),chainM2=mkRope(); // kept as stand-ins; the chain itself is drawn as links below
 const LINK_MAX=220,chainLinks=new T3.InstancedMesh(new T3.TorusGeometry(.085,.028,5,10).scale(1.75,1,1),new T3.MeshStandardMaterial({color:0xffffff,roughness:.45,metalness:.55}),LINK_MAX);
+/* at night the chain glows softly in its own colours (paint marks included) so it stays readable against dark water */
+chainLinks.material.emissive.setRGB(0,0,0);
+chainLinks.material.onBeforeCompile=sh=>{sh.fragmentShader=sh.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n#ifdef USE_COLOR\n totalEmissiveRadiance*=vColor.rgb*.7+.3;\n#endif');};
 chainLinks.instanceMatrix.setUsage(T3.DynamicDrawUsage);
 chainLinks.instanceColor=new T3.InstancedBufferAttribute(new Float32Array(LINK_MAX*3).fill(.4),3).setUsage(T3.DynamicDrawUsage);chainLinks.frustumCulled=false;chainLinks.count=0;scene3.add(chainLinks);const _lm=new T3.Matrix4(),_lc=new T3.Color();
 function uploadActive(attribute,count){
@@ -1293,7 +1296,7 @@ function fxUpdate(dt){
 const SUN0=SUN.clone(),MOON=new T3.Vector3(.42,.36,-.83).normalize(),FOG0=FOG.clone(),FOGN=new T3.Color(.03,.045,.075);
 let nightEnv0=null;
 function applyNight(n){
-  const e=n*n*(3-2*n);U.uNight.value=e;
+  const e=n*n*(3-2*n);U.uNight.value=e;chainLinks.material.emissive.setScalar(.95*e);
   SUN.copy(SUN0).lerp(MOON,e).normalize();sunL.position.copy(SUN).multiplyScalar(100);
   sunL.intensity=(.85-.55*e)*LIGHT_SCALE;sunL.color.setRGB(1-.25*e,.94-.12*e,.86+.14*e);
   hemiL.intensity=(.62-.46*e)*LIGHT_SCALE;hemiL.color.setRGB(.72-.4*e,.77-.37*e,.79-.21*e);
