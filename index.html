@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="modulepreload" href="vendor/three.module.min.js">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="assets/game.css?v=20261124-skinny">
+<link rel="stylesheet" href="assets/game.css?v=20261124-tidy">
 </head>
 <body>
 <section id="startup" class="startup" role="status" aria-live="polite" aria-atomic="true">
@@ -119,7 +119,6 @@
 
   <div class="sheet" id="menu" role="dialog" aria-modal="true" aria-labelledby="menuTitle" tabindex="-1">
     <div class="card">
-      <p class="plays" id="plays" role="status" aria-describedby="playsHelp" hidden><span>Total games played</span><span class="plays-value"><b id="playsN"></b><small id="playsState" hidden></small></span><button type="button" class="btn" id="playsRetry" aria-label="Retry loading total games played" hidden>Retry</button><span id="playsHelp" hidden>Shared total across all players on the public game.</span></p>
       <div class="hd"><h1 id="menuTitle">Stern<span>-</span>To</h1><div class="eyebrow" id="spec">50 m · 500 t · twin screw · bow thruster</div></div>
       <div class="shipsel" id="shipSel"></div>
       <div class="berths" id="berths"></div>
@@ -130,49 +129,43 @@
         <label for="cS">Swell <b id="cSv">0.2 m</b><input type="range" id="cS" min="0" max="1.5" step="0.1" value="0.2"></label>
       </div>
       
-      <div class="acts"><button class="btn hot go" id="resume" hidden>Resume</button><button class="btn hot go" id="go">Cast off</button><button class="btn go" id="helpBtn">Controls &amp; rules</button></div>
+      <div class="acts"><button class="btn hot go" id="resume" hidden>Resume</button><button class="btn hot go" id="go">Cast off</button><button class="btn go" id="helpBtn">Controls</button></div>
     </div>
   </div>
 
   <div class="sheet" id="help" role="dialog" aria-modal="true" aria-labelledby="helpTitle" tabindex="-1" hidden>
     <div class="card">
-      <h2 class="eyebrow" id="helpTitle">Controls &amp; rules</h2>
+      <h2 class="eyebrow" id="helpTitle">Controls</h2>
+      <p class="plays" id="plays" role="status" aria-describedby="playsHelp" hidden><span>Total games played</span><span class="plays-value"><b id="playsN"></b><small id="playsState" hidden></small></span><button type="button" class="btn" id="playsRetry" aria-label="Retry loading total games played" hidden>Retry</button><span id="playsHelp" hidden>Shared total across all players on the public game.</span></p>
       <div class="keys">
-        <div><kbd>W</kbd><kbd>S</kbd> port engine ahead, astern</div>
-        <div><kbd>↑</kbd><kbd>↓</kbd> starboard engine ahead, astern</div>
-        <div><kbd>Q</kbd> sync both engines · hold any keys together</div>
-        <div><kbd>A</kbd><kbd>D</kbd> bow thruster to port, starboard (hold)</div>
-        <div><kbd>←</kbd><kbd>→</kbd> rudder · <kbd>C</kbd> midships</div>
-        <div><kbd>Space</kbd> all stop (engines) · <kbd>R</kbd> restart</div>
-        <div><kbd>1</kbd>–<kbd>4</kbd> bow and stern lines · <kbd>5</kbd><kbd>6</kbd> springs</div>
-        <div><kbd>H</kbd> heave lines in · <kbd>J</kbd> slack lines · <kbd>G</kbd> let lines go</div>
-        <div><kbd>Z</kbd> choose anchors · <kbd>X</kbd> drop · <kbd>B</kbd> bring in / stop</div>
-        <div><kbd>F</kbd> fenders</div>
-        <div><kbd>T</kbd> top view · <kbd>V</kbd> chase camera</div>
-        <div><kbd>P</kbd> pause · <kbd>Esc</kbd> close controls / menu</div>
-        <div><kbd>Drag</kbd> orbit · <kbd>Wheel</kbd> zoom · <kbd>[</kbd><kbd>]</kbd> rotate</div>
+        <div><span class="k"><kbd>W</kbd><kbd>S</kbd></span><span>port engine</span></div>
+        <div><span class="k"><kbd>↑</kbd><kbd>↓</kbd></span><span>starboard engine</span></div>
+        <div><span class="k"><kbd>Q</kbd></span><span>sync engines</span></div>
+        <div><span class="k"><kbd>Space</kbd></span><span>all stop</span></div>
+        <div><span class="k"><kbd>A</kbd><kbd>D</kbd></span><span>thruster</span></div>
+        <div><span class="k"><kbd>←</kbd><kbd>→</kbd></span><span>rudder</span></div>
+        <div><span class="k"><kbd>C</kbd></span><span>rudder centre</span></div>
+        <div><span class="k"><kbd>F</kbd></span><span>fenders</span></div>
+        <div><span class="k"><kbd>1</kbd>–<kbd>6</kbd></span><span>throw a line</span></div>
+        <div><span class="k"><kbd>H</kbd><kbd>J</kbd></span><span>heave · slack</span></div>
+        <div><span class="k"><kbd>G</kbd></span><span>let lines go</span></div>
+        <div><span class="k"><kbd>Z</kbd></span><span>anchor side</span></div>
+        <div><span class="k"><kbd>X</kbd></span><span>drop anchor</span></div>
+        <div><span class="k"><kbd>B</kbd></span><span>anchor up</span></div>
+        <div><span class="k"><kbd>T</kbd><kbd>V</kbd></span><span>top · chase view</span></div>
+        <div><span class="k"><kbd>P</kbd></span><span>pause</span></div>
+        <div><span class="k"><kbd>R</kbd></span><span>restart</span></div>
+        <div><span class="k"><kbd>Esc</kbd></span><span>menu</span></div>
+        <div><span class="k"><kbd>Drag</kbd></span><span>orbit</span></div>
+        <div><span class="k"><kbd>Wheel</kbd></span><span>zoom</span></div>
       </div>
       <ul class="touchhint">
-        <li>Slide the red and green levers for the engines; hold AHD or AST for a gentle bump. All stop brings both to neutral.</li>
-        <li>Hold ◀ or ▶ for the bow thruster.</li>
-        <li>One finger on the water orbits the camera; two fingers twist and pinch.</li>
-        <li>Tap the anchor, line or fender icon to open its card; tap it again to close. A green dot means that gear is out.</li>
-        <li>Anchors: tap the port or starboard anchor, or the pair for both, then the down arrow to drop. Tap − or + for a metre of chain, or hold to keep going. The up arrow brings the anchor in; tap again to stop.</li>
-        <li>Lines: tap a circle to throw that line; the middle two are springs. Hold − to heave in or + to slack. They work every line unless you tap one to single it out. The hook arrow lets go.</li>
-        <li>Fenders: tap either side of the hull to rig or stow them. <kbd>F</kbd> cycles port, starboard, both and in.</li>
-      </ul>
-      <h3 class="eyebrow">Harbour navigation</h3>
-      <ul class="touchhint">
-        <li>Follow the amber waypoint through clear water, then approach the berth slowly. In this harbour, aim for 6 kn or less near docks and in the channel.</li>
-        <li>Entering a marked channel, keep red marks to port and green marks to starboard. Keep to the starboard side when there is room.</li>
-        <li>An east cardinal mark has black and yellow bands and two outward-pointing cones. Pass to its east.</li>
-        <li>Meeting head-on: both boats turn to starboard. Crossing: give way to a boat on your starboard side and pass behind it.</li>
-        <li>Overtaking: keep clear until safely past. Leave room for slowing and turning, and act early if another boat is not keeping clear.</li>
-        <li>All stop selects neutral; momentum remains. Use short astern bursts to brake, and rig fenders before coming alongside.</li>
-        <li>At the final anchorage, drop inside the ring and use + to reach the target shown in Anchors. Release the control and settle for three seconds. The chain holds automatically, and the mission finishes with a camera pan and zoom.</li>
+        <li>Levers · engines</li>
+        <li>◀ ▶ · thruster</li>
+        <li>Drag · orbit · pinch · zoom</li>
+        <li>Top-right icons · anchors, lines, fenders</li>
       </ul>
       <button class="btn" id="minBtn" aria-pressed="false">Mirroring mode · off</button>
-      <p class="mnote">Smaller, see-through controls for showing the game on a TV. They brighten while you touch them.</p>
       <button class="btn hot go" id="helpClose">Back</button>
     </div>
   </div>
@@ -192,7 +185,7 @@
   </div>
 </div>
 
-<script type="module" src="src/main.js?v=20261124-skinny"></script>
+<script type="module" src="src/main.js?v=20261124-tidy"></script>
 
 
 </body>

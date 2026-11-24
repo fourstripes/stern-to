@@ -56,7 +56,7 @@ const LEVELS=[
   stops:[{name:'Fuel dock',dur:9,doing:'Taking fuel',done:'Fuel on board',slip:{x:-60,y:206.6,h:0,len:64,wid:13.5,either:true}},
          {name:'Shipyard',dur:10,doing:'Yard crew at work',done:'Repairs done',slip:{x:181,y:0,h:180,len:60,wid:15.4,either:true}},
          {name:"Owner's berth",dur:14,doing:'Owner flying in',done:'Owner aboard',slip:{x:0,y:-229.5,h:-90,len:58,wid:13.4}},
-         {name:'Anchorage',dur:3,anchor:true,doing:'Anchor down',done:'Anchored',slip:{x:330,y:332,h:0,len:48,wid:48,either:true,circle:true}}],
+         {name:'Anchorage',dur:3,anchor:true,doing:'Anchor down',done:'Anchored',slip:{x:330,y:332,h:0,len:56,wid:56,either:true,circle:true}}],
   slip:{x:-60,y:206.6,h:0,len:64,wid:13.5,either:true},
   navigation:[[-280,270],[-120,245],[80,245],[270,245],[290,110],[290,0],[260,0],[290,-110],[285,-250],[220,-275],[150,-275],[85,-275],[0,-275],[-70,-275],[-270,-370],[140,-370],[330,300]],
   harbourZones:[[-230,190,235,255],[160,-165,335,165],[-150,-350,240,-195]],
@@ -834,7 +834,9 @@ const SHEER=x=>{const t=Math.max(0,Math.min(1,(x-5)/20)),a=Math.max(0,Math.min(1
 const RADAR_G=new T3.BoxGeometry(2.3,.13,.3);
 /* exhaust outlets low on each side, aft (hull side is about 4.42 m out at x -19) */
 [-1,1].forEach(sd=>YG.push([new T3.BoxGeometry(.95,.34,.1).translate(-19,.46,sd*4.43),'pocket']));
-[[21,2.7],[9,4.62],[-11,4.75],[-23.5,4.4]].forEach(([x,w])=>[-1,1].forEach(sd=>YG.push([new T3.BoxGeometry(.75,.32,.14).translate(x,2.92+SHEER(x),sd*(w+.04)),'pocket'])));
+/* line fairleads sit on the drawn hull side, half let into it */
+const HULL_SIDE=(()=>{const pts=hullShape(1,1).getPoints(120).filter(p=>p.y>=0);return x=>{let w=0;for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];if(a.x!==b.x&&(a.x-x)*(b.x-x)<=0)w=Math.max(w,a.y+(b.y-a.y)*(x-a.x)/(b.x-a.x));}return w;};})();
+[21,9,-11,-23.5].forEach(x=>[-1,1].forEach(sd=>YG.push([new T3.BoxGeometry(.75,.32,.14).translate(x,2.92+SHEER(x),sd*(HULL_SIDE(x)+.02)),'pocket'])));
 YG.forEach(([g,key],i)=>{if(i>2&&key!=='pool')return;const pa=g.attributes.position;
   for(let k=0;k<pa.count;k++){const x=pa.getX(k),y=pa.getY(k);if(y>0)pa.setY(k,y+SHEER(x)*Math.min(1,y/3.2));}
   pa.needsUpdate=true;g.computeVertexNormals();});
@@ -1122,9 +1124,6 @@ function advanceFoam(){
 // berth marker
 const slipG=new T3.Group(),slipFill=new T3.MeshBasicMaterial({color:0xffb547,transparent:true,opacity:.14,depthWrite:false,fog:false}),slipLine=new T3.LineBasicMaterial({color:0xffb547,fog:false});
 scene3.add(slipG);
-const waypointPoints=[];for(let i=0;i<40;i++){const angle=i/40*TAU;waypointPoints.push(new T3.Vector3(Math.cos(angle),0,Math.sin(angle)));}
-const waypointRing=new T3.LineLoop(new T3.BufferGeometry().setFromPoints(waypointPoints),new T3.LineBasicMaterial({color:0x66d9ff,transparent:true,opacity:.8,depthWrite:false,fog:false}));
-waypointRing.visible=false;scene3.add(waypointRing);
 let lvG=null,pirate=null;
 function build3D(){
   if(lvG)disposeTransientGroup(lvG);
@@ -1317,7 +1316,7 @@ function physGuard(){
 const hullHW=xm=>{const x=xm/SL,P=[[25,0],[19,2.9],[10,4.5],[-5,4.7],[-25,4.3]];if(x>=25)return 0;if(x<=-25)return 4.3*SB;
   for(let i=0;i<P.length-1;i++)if(x<=P[i][0]&&x>=P[i+1][0]){const t=(P[i][0]-x)/(P[i][0]-P[i+1][0]);return (P[i][1]+(P[i+1][1]-P[i][1])*t)*SB;}return 4.5*SB;};
 // a point just outboard of the hull at a fairlead: lines and chain start here, so they never cut through the ship
-const fairPt=(xm,sd,lift)=>v3a.set(xm,(shipId==='tender'?deckY-.25:deckY-.46*SL)+sheerAt(xm)+(lift||0),sd*(hullHW(xm)+.18)).applyMatrix4(own.matrixWorld);
+const fairPt=(xm,sd,lift)=>v3a.set(xm,(shipId==='tender'?deckY-.25:deckY-.46*SL)+sheerAt(xm)+(lift||0),sd*(HULL_SIDE(xm/SL)*SB+.14)).applyMatrix4(own.matrixWorld);
 // Weather and mission clocks advance with the simulation, including during frame catch-up.
 function advanceMissionEnvironment(dt){
   if(stops&&stops[S.stage].anchor&&!S.nightOn&&state==='play'){
@@ -1442,9 +1441,6 @@ function sync3D(dt){
     else S.snap=null;}
   else whip[0].visible=whip[1].visible=false;
   slipG.visible=!(stops&&S.done);
-  {const nav=navigationStatus(),waypoint=nav.waypoint,goal=nav.finalTarget;
-    waypointRing.visible=state==='play'&&!S.done&&Math.hypot(waypoint[0]-goal[0],waypoint[1]-goal[1])>1;
-    if(waypointRing.visible){waypointRing.position.set(waypoint[0],waveH(waypoint[0],waypoint[1])+.45,waypoint[1]);waypointRing.scale.setScalar(Math.max(3,LEN*.12));}}
   const hex=S.inPos?0x3ddc84:0xffb547;slipFill.color.setHex(hex);slipLine.color.setHex(hex);slipFill.opacity=S.inPos?.16+.25*S.hold/3:.13;
   foamPass(dt);
 }
@@ -1600,8 +1596,10 @@ function advanceDeckWork(dt){
   // bow hand walks forward to let the anchor go
   /* crew go inside while she is under way, and come back out as she nears the berth or there is work on deck */
   var goIn=shipId!=='tender'&&Math.hypot(slip.x-S.x,slip.y-S.y)>Math.max(80,LEN*1.8)&&!lines.some(l=>l.state!=='stowed')&&!S.anchors.length&&!S.anchorCmd&&!S.fend&&S.fendN[0]+S.fendN[1]<.01;
-  const bxT=S.anchorCmd||S.anchors.some(a=>!a.held)?23.2:goIn?13.8:19.5;S.bowX+=clamp(bxT-S.bowX,-2.2*dt/SL,2.2*dt/SL);
-  crew[0].visible=!(goIn&&Math.abs(S.bowX-13.8)<.2&&Math.abs(S.bowY)<.2);
+  /* the bow hand only comes out to work the anchor or a bow line, then goes back in */
+  const bowWork=S.anchorCmd||S.anchors.some(a=>!a.held||a.weighing)||[0,1].some(i=>{const st=lines[i].state;return st==='throw'||st==='haul'||st==='queued';});
+  const bxT=S.anchorCmd||S.anchors.some(a=>!a.held)?23.2:bowWork?19.5:13.8;S.bowX+=clamp(bxT-S.bowX,-3*dt/SL,3*dt/SL);
+  crew[0].visible=bowWork||(shipId!=='tender'&&!(Math.abs(S.bowX-13.8)<.2&&Math.abs(S.bowY)<.2));
   if(S.anchorCmd&&Math.abs(S.bowX-23.2)<.1){
     const c0=Math.cos(S.psi),s0=Math.sin(S.psi);S.anchorCmd=false;
     const dsides=(S.dropSides||[]).filter(sd=>!S.anchors.some(a=>a.side===sd));S.dropSides=null;

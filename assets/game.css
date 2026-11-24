@@ -610,3 +610,17 @@ html #app,html #app.mooring-wide{--mooring-width:132px;--c:30px}
 #app #gLines #lnBody{grid-template-columns:minmax(0,1fr);gap:5px}
 /* short landscape: the skinny card needs only a little room, so the helm keeps a sensible width */
 html #app.mooring-split .dock{max-width:470px}
+
+/* Controls: a short key list (or touch list), the shared play count, then mirroring and Back. */
+#menu .card{grid-template-areas:"head" "ship" "berths" "mstart" "conds" "acts"}
+@media (orientation:landscape) and (max-height:560px){#menu .card{grid-template-areas:"head berths" "ship berths" "ship mstart" "acts conds"}}
+#help .card{max-width:460px;gap:12px}
+#help .plays{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0;padding:0 0 8px;border-bottom:1px solid var(--line);font-family:var(--display);font-size:12px;letter-spacing:.06em;color:var(--dim);white-space:nowrap}
+#help .plays[hidden]{display:none}
+#help #playsRetry{min-width:44px;min-height:44px;padding:3px 6px;font-size:11px;letter-spacing:.02em;touch-action:manipulation}
+#help .touchhint{list-style:none;padding:0;display:none;gap:6px;font-family:var(--display);font-size:14px;letter-spacing:.04em;color:var(--ink)}
+@media (pointer:coarse){#help .touchhint{display:grid}}
+#help .plays{align-self:stretch;width:100%;max-width:none}
+#help .keys{gap:5px 18px;font-size:13px}
+#help .keys div{display:grid;grid-template-columns:62px minmax(0,1fr);align-items:center;gap:8px}
+#help .keys .k{display:flex;gap:3px;align-items:center;white-space:nowrap}

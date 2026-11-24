@@ -61,7 +61,7 @@ The Anchors panel keeps its yacht diagram, Drop, Bring in and chain controls tog
 
 ## Mission navigation and the final anchorage
 
-The amber waypoint guides the boat around land to the next berth. Red and green lateral marks follow IALA region A: red to port and green to starboard on entry. East-cardinal cones point away from each other; safe passage is to their east. The game's harbour zones use a 6 kn advisory. The Controls & rules menu explains head-on, crossing and overtaking encounters. Traffic predicts close approaches, slows or alters course when needed, and checks nearby hulls and quays before moving.
+The amber arrow guides the boat around land to the next berth; only the final anchorage is marked on the water. Red and green lateral marks follow IALA region A: red to port and green to starboard on entry. East-cardinal cones point away from each other; safe passage is to their east. The game's harbour zones use a 6 kn advisory. Traffic predicts close approaches, slows or alters course when needed, and checks nearby hulls and quays before moving.
 
 Shore service requires two actual fast shore lines. At the final anchorage, open Anchors to see the chain paid out, target and progress together:
 
@@ -73,9 +73,9 @@ Drop inside the marked circle, use + to reach at least the displayed target, rel
 
 ## Total games played
 
-The menu shows one shared total across all players on the public GitHub Pages game. The existing server-side counter and its history are retained. Each successfully started game adds one, including a new Cast off, restart or retry. Page loads, menu visits, pause/resume and continuing a voyage do not add plays. This counts games, so one person can contribute more than one game.
+The Controls page shows one shared total across all players on the public GitHub Pages game. The existing server-side counter and its history are retained. Each successfully started game adds one, including a new Cast off, restart or retry. Page loads, menu visits, pause/resume and continuing a voyage do not add plays. This counts games, so one person can contribute more than one game.
 
-The total sits at the top of the menu and refreshes when the menu opens, with a short cooldown and duplicate-read protection. Slow requests have up to 30 seconds to finish without blocking play. A failed read retries once; Retry and reconnection can request another read. Failed increments are never retried, because the service may already have counted them. Local development and preview URLs never contact the public counter. If the service cannot be reached, the menu shows an unavailable state or labels its last confirmed total as Last known; it does not invent a local total or silently reset the shared count.
+The total sits at the top of the Controls page and refreshes when the menu opens, with a short cooldown and duplicate-read protection. Slow requests have up to 30 seconds to finish without blocking play. A failed read retries once; Retry and reconnection can request another read. Failed increments are never retried, because the service may already have counted them. Local development and preview URLs never contact the public counter. If the service cannot be reached, the menu shows an unavailable state or labels its last confirmed total as Last known; it does not invent a local total or silently reset the shared count.
 
 ## Development checks
 
