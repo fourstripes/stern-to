@@ -1392,14 +1392,21 @@ function sync3D(dt){
     const hp=anchorHawse[i].position;anchorHawse[i].getWorldPosition(v3a);
     // Both ends inherit their real object transforms, including hull scale, heel and pitch.
     if(movingEye)anchorEyes[i].getWorldPosition(v3b);
-    else{
-      v3d.set(A.x,0,A.y);own.worldToLocal(v3d);let lx=v3d.x-hp.x,lz=v3d.z-hp.z;
-      if(!tnd){const minOut=Math.abs(lx)*.45+.8;if(lz*sd<minOut)lz=sd*minOut;} // lead around the outside of the flare
-      const ll=Math.hypot(lx,lz)||1,d=Math.hypot(A.x-S.x,A.y-S.y),rc=Math.min(Math.max(d,2),A.held?2+deckY*1.3:1+deckY*.45);
-      v3b.set(hp.x+lx/ll*rc,-2.5,hp.z+lz/ll*rc);own.localToWorld(v3b);v3b.y=-2.5;
+    let taut=1;
+    if(!movingEye){
+      /* The chain leaves the hawse at the angle a hanging chain would take: straight up and down while the
+         anchor is under the bow, opening out progressively as she falls back, and pulling straight when tight. */
+      const dh=Math.hypot(A.x-v3a.x,A.y-v3a.z),depth=7*Math.sqrt(Math.max(.25,SL)),rise=Math.max(.5,v3a.y)+depth;
+      const slack=Math.max(0,A.L0-Math.hypot(dh,rise));taut=clamp(1-slack/(rise*.8+2),0,1);
+      const tanA=dh/rise*Math.pow(taut,1.3),drop=Math.max(.5,v3a.y+2.5);
+      v3d.set(A.x,v3a.y,A.y);own.worldToLocal(v3d);let lx=v3d.x-hp.x,lz=v3d.z-hp.z;const ll=Math.hypot(lx,lz);
+      const out=Math.min(drop*tanA,dh);lx=ll>1e-4?lx/ll*out:0;lz=ll>1e-4?lz/ll*out:0;
+      if(!tnd&&lz*sd<.35)lz=sd*.35; // hang just clear of the hull side and its flare
+      v3b.set(hp.x+lx,hp.y-drop,hp.z+lz);own.localToWorld(v3b);v3b.y=-2.5;
     }
     const span=v3a.distanceTo(v3b);if(span<1e-5)continue;
-    v3c.addVectors(v3a,v3b).multiplyScalar(.5);v3c.y-=Math.min(A&&!A.held?.35:.05,span*.2);
+    /* slack chain drops from the hawse before curving away; tight chain runs straight */
+    v3c.addVectors(v3a,v3b).multiplyScalar(.5);if(!movingEye){v3c.x+=(v3a.x-v3c.x)*(1-taut)*.6;v3c.z+=(v3a.z-v3c.z)*(1-taut)*.6;}
     /* links ride on the chain itself: as chain pays out or heaves in they slide out of / back into the pocket, and the paint marks travel with them */
     const Lc=v3a.distanceTo(v3c)+v3c.distanceTo(v3b),ls=tnd?.5:1,P=.2*ls;
     const V=movingEye?Lc:Math.max(A.L0,Lc),limit=Math.min(LINK_MAX,nLinks+LINK_MAX/(tnd?1:2)); /* keep a link budget for each hawse */
