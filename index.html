@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="modulepreload" href="vendor/three.module.min.js">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="assets/game.css?v=20261124-diagrams">
+<link rel="stylesheet" href="assets/game.css?v=20261124-skinny">
 </head>
 <body>
 <section id="startup" class="startup" role="status" aria-live="polite" aria-atomic="true">
@@ -58,18 +58,18 @@
   </section>
     <section class="g g-lines c-tr" id="gLines" aria-label="Mooring">
       <div class="mooring-toolbar" role="group" aria-label="Equipment controls">
-        <button class="btn mooring-toggle" id="anchorsT" aria-controls="anchorBody" aria-expanded="false"><span class="mooring-label">Anchors</span><span class="mooring-status" id="anchorsStatus"></span></button>
-        <button class="btn mooring-toggle" id="linesT" aria-controls="lnBody" aria-expanded="false"><span class="mooring-label">Lines</span><span class="mooring-status" id="linesStatus"></span></button>
-        <button class="btn mooring-toggle" id="fendersT" aria-controls="fenderBody" aria-expanded="false"><span class="mooring-label">Fenders</span><span class="mooring-status" id="fendersStatus"></span></button>
+        <button class="btn mooring-toggle" id="anchorsT" aria-controls="anchorBody" aria-expanded="false"><svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="4.5" r="2"/><path d="M12 6.5V21M8 10h8M4.5 14.5C5 21 19 21 19.5 14.5M4.5 14.5 3 17M4.5 14.5 7 16M19.5 14.5 21 17M19.5 14.5 17 16"/></svg><span class="mooring-label">Anchors</span><span class="mooring-status" id="anchorsStatus"></span></button>
+        <button class="btn mooring-toggle" id="linesT" aria-controls="lnBody" aria-expanded="false"><svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 21h10M9 21V11h6v10M6.5 11h11"/><path d="M2.5 5.5C7 9.5 17 9.5 21.5 5.5"/></svg><span class="mooring-label">Lines</span><span class="mooring-status" id="linesStatus"></span></button>
+        <button class="btn mooring-toggle" id="fendersT" aria-controls="fenderBody" aria-expanded="false"><svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2v3"/><rect x="8" y="5" width="8" height="17" rx="4"/><path d="M8.5 10h7M8.5 17h7"/></svg><span class="mooring-label">Fenders</span><span class="mooring-status" id="fendersStatus"></span></button>
         <button class="btn" id="cornerBtn" title="Move this panel to another corner" aria-label="Move this panel to another corner">⤡</button>
       </div>
         <div class="mooring-panel" id="anchorBody" role="group" aria-labelledby="anchorsT" hidden>
           <div class="anchor-map">
             <div class="equipment-diagram" id="anchorDiagram" role="group" aria-label="Choose anchors on the yacht" data-mode="paired">
-              <svg class="equipment-yacht" viewBox="0 0 120 140" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path class="yacht-hull" d="M60 3C39 28 25 61 25 97L29 130Q30 137 40 137H80Q90 137 91 130L95 97C95 61 81 28 60 3Z"/><path class="yacht-deck" d="M60 25C45 45 38 65 38 91L41 119H79L82 91C82 65 75 45 60 25Z"/><path class="yacht-cabin" d="M47 62Q60 55 73 62L76 93H44Z"/><path class="yacht-deck" d="M42 125H78"/></svg>
+              <svg class="equipment-yacht" viewBox="0 0 56 128" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path class="yacht-hull" d="M28 3C42 22 48 40 48 62L46 120Q46 125 41 125L15 125Q10 125 10 120L8 62C8 40 14 22 28 3Z"/><path class="yacht-cabin" d="M20 52Q28 47 36 52L37 86H19Z"/></svg>
               <button class="equipment-point" data-anchor="0" aria-label="Select port anchor" aria-pressed="true"><svg class="equipment-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="4" r="2"/><path d="M12 6V21M8 10H16M4 14C4 23 20 23 20 14M4 14L2 17M4 14L7 16M20 14L22 17M20 14L17 16"/></svg><span class="equipment-label">Port</span><span class="equipment-state" aria-hidden="true">In</span></button>
               <button class="equipment-point" data-anchor="1" aria-label="Select starboard anchor" aria-pressed="false"><svg class="equipment-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="4" r="2"/><path d="M12 6V21M8 10H16M4 14C4 23 20 23 20 14M4 14L2 17M4 14L7 16M20 14L22 17M20 14L17 16"/></svg><span class="equipment-label">Stbd</span><span class="equipment-state" aria-hidden="true">In</span></button>
-              <button class="btn" data-anchor="2" aria-label="Select both anchors" aria-pressed="false">Both</button>
+              <button class="btn" data-anchor="2" aria-label="Select both anchors" aria-pressed="false" title="Both anchors"><svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5v10M4.5 8h5M3 12c0 4 8 4 8 0M17 5v10M14.5 8h5M13 12c0 4 8 4 8 0"/></svg></button>
             </div>
             <span class="lt" id="scopeTx" role="status">Stowed</span>
           </div>
@@ -92,7 +92,7 @@
         </div>
         <div class="mooring-panel" id="lnBody" role="group" aria-labelledby="linesT" hidden>
           <div class="equipment-diagram" id="shipBox" role="group" aria-label="Mooring lines on the yacht">
-            <svg class="equipment-yacht" viewBox="0 0 120 140" aria-hidden="true" focusable="false"><path class="yacht-hull" d="M60 3C39 28 25 61 25 97L29 130Q30 137 40 137H80Q90 137 91 130L95 97C95 61 81 28 60 3Z"/><path class="yacht-deck" d="M60 25C45 45 38 65 38 91L41 119H79L82 91C82 65 75 45 60 25Z"/><path class="yacht-cabin" d="M47 62Q60 55 73 62L76 93H44Z"/><path class="yacht-deck" d="M42 125H78"/></svg>
+            <svg class="equipment-yacht" viewBox="0 0 56 128" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path class="yacht-hull" d="M28 3C42 22 48 40 48 62L46 120Q46 125 41 125L15 125Q10 125 10 120L8 62C8 40 14 22 28 3Z"/><path class="yacht-cabin" d="M20 52Q28 47 36 52L37 86H19Z"/></svg>
             <button class="ln" data-i="0" aria-label="Port bow line" aria-pressed="false" title="Port bow line"><span class="line-label">Port bow</span><span class="line-state" aria-hidden="true"></span></button>
             <button class="ln" data-i="1" aria-label="Starboard bow line" aria-pressed="false" title="Starboard bow line"><span class="line-label">Stbd bow</span><span class="line-state" aria-hidden="true"></span></button>
             <button class="ln" data-i="2" aria-label="Port stern line" aria-pressed="false" title="Port stern line"><span class="line-label">Port stern</span><span class="line-state" aria-hidden="true"></span></button>
@@ -102,12 +102,12 @@
           </div>
           <div id="actBox" hidden>
             <div class="line-tension"><span class="lt" id="actName">All lines</span><div class="meter" title="Line tension"><i id="actFill"></i></div></div>
-            <div class="line-actions"><button class="btn" id="hvBtn">Heave in</button><button class="btn" id="slBtn">Slack</button><button class="btn" id="lgBtn">Let go</button></div>
+            <div class="line-actions"><button class="btn" id="hvBtn" title="Heave in (hold)"><span class="sym" aria-hidden="true">−</span><span class="sr-only">Heave in</span></button><button class="btn" id="slBtn" title="Slack (hold)"><span class="sym" aria-hidden="true">+</span><span class="sr-only">Slack</span></button><button class="btn" id="lgBtn" title="Let go"><svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 20V9a5 5 0 0 1 10 0v2"/><path d="M12 8l3 3 3-3"/><path d="M3 20h6"/></svg><span class="sr-only">Let go</span></button></div>
           </div>
         </div>
         <div class="mooring-panel" id="fenderBody" role="group" aria-labelledby="fendersT" hidden>
           <div class="equipment-diagram" id="fenderDiagram" role="group" aria-label="Fenders on the yacht">
-            <svg class="equipment-yacht" viewBox="0 0 120 140" aria-hidden="true" focusable="false"><path class="yacht-hull" d="M60 3C39 28 25 61 25 97L29 130Q30 137 40 137H80Q90 137 91 130L95 97C95 61 81 28 60 3Z"/><path class="yacht-deck" d="M60 25C45 45 38 65 38 91L41 119H79L82 91C82 65 75 45 60 25Z"/><path class="yacht-cabin" d="M47 62Q60 55 73 62L76 93H44Z"/><path class="yacht-deck" d="M42 125H78"/></svg>
+            <svg class="equipment-yacht" viewBox="0 0 56 128" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path class="yacht-hull" d="M28 3C42 22 48 40 48 62L46 120Q46 125 41 125L15 125Q10 125 10 120L8 62C8 40 14 22 28 3Z"/><path class="yacht-cabin" d="M20 52Q28 47 36 52L37 86H19Z"/></svg>
             <button class="equipment-point" data-fender="1" aria-label="Rig port fenders" aria-pressed="false"><svg class="equipment-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 2V5M12 2V5M19 2V5"/><rect x="3" y="5" width="4" height="16" rx="2"/><rect x="10" y="5" width="4" height="16" rx="2"/><rect x="17" y="5" width="4" height="16" rx="2"/></svg><span class="equipment-label">Port</span><span class="equipment-state" aria-hidden="true">In</span></button>
             <button class="equipment-point" data-fender="2" aria-label="Rig starboard fenders" aria-pressed="false"><svg class="equipment-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 2V5M12 2V5M19 2V5"/><rect x="3" y="5" width="4" height="16" rx="2"/><rect x="10" y="5" width="4" height="16" rx="2"/><rect x="17" y="5" width="4" height="16" rx="2"/></svg><span class="equipment-label">Stbd</span><span class="equipment-state" aria-hidden="true">In</span></button>
           </div>
@@ -156,10 +156,10 @@
         <li>Slide the red and green levers for the engines; hold AHD or AST for a gentle bump. All stop brings both to neutral.</li>
         <li>Hold ◀ or ▶ for the bow thruster.</li>
         <li>One finger on the water orbits the camera; two fingers twist and pinch.</li>
-        <li>Tap Anchors, Lines or Fenders to open a compact card. Tap the same button again to close it.</li>
-        <li>On the anchor yacht diagram, choose Port, Starboard or Both, then Drop. Tap − or + for one metre of chain, or hold to continue. Bring in retrieves the selected anchors; Stop pauses retrieval.</li>
-        <li>Tap a line on the yacht diagram to throw it, then hold Heave in or Slack. These actions work every line unless you tap one to single it out. Fwd and Aft mark the spring lines.</li>
-        <li>On the fender yacht diagram, tap either side to rig or stow it. Both rigs both sides; Stow brings them all in.</li>
+        <li>Tap the anchor, line or fender icon to open its card; tap it again to close. A green dot means that gear is out.</li>
+        <li>Anchors: tap the port or starboard anchor, or the pair for both, then the down arrow to drop. Tap − or + for a metre of chain, or hold to keep going. The up arrow brings the anchor in; tap again to stop.</li>
+        <li>Lines: tap a circle to throw that line; the middle two are springs. Hold − to heave in or + to slack. They work every line unless you tap one to single it out. The hook arrow lets go.</li>
+        <li>Fenders: tap either side of the hull to rig or stow them. <kbd>F</kbd> cycles port, starboard, both and in.</li>
       </ul>
       <h3 class="eyebrow">Harbour navigation</h3>
       <ul class="touchhint">
@@ -192,7 +192,7 @@
   </div>
 </div>
 
-<script type="module" src="src/main.js?v=20261124-diagrams"></script>
+<script type="module" src="src/main.js?v=20261124-skinny"></script>
 
 
 </body>

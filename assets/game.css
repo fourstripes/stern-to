@@ -526,3 +526,87 @@ kbd{font-family:var(--display);font-weight:600;font-size:12px;color:var(--ink);b
   #app.mooring-wide #chainRow{column-gap:2px}
   #app.mooring-wide #anchorChain{font-size:9.5px}
 }
+
+/* Skinny, icon-led equipment panel: three tool icons, one card open at a time, plain circles on a small hull. */
+html #app,html #app.mooring-wide{--mooring-width:132px;--c:30px}
+@media (pointer:coarse){html #app,html #app.mooring-wide{--mooring-width:146px;--c:34px}}
+#app #gLines{padding:5px;gap:0;border-radius:12px}
+#app #gLines .mooring-toolbar{grid-template-columns:repeat(3,minmax(0,1fr)) 18px;gap:3px;align-items:center}
+#app #gLines .mooring-toggle{position:relative;min-width:0;min-height:32px;height:32px;padding:0;border-radius:8px}
+@media (pointer:coarse){#app #gLines .mooring-toggle{min-height:38px;height:38px}}
+#app #gLines .mooring-label,#app #gLines .mooring-status,#app #gLines .equipment-label,#app #gLines .equipment-state,#app #gLines .line-label,#app #gLines #actName,#app #gLines .anchor-chain-label,#app #gLines #scopeTx,#app #gLines .anchor-goal .eyebrow,#app #gLines .anchor-goal p{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.tool-icon{display:block;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+#app #gLines .mooring-toggle.has-equipment::after{content:"";position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;background:var(--stbd);box-shadow:0 0 0 2px rgba(6,22,32,.94)}
+#app #gLines #cornerBtn{width:18px;height:32px;min-height:0;padding:0;border:0;background:none;color:var(--dim);font-size:13px}
+#app #gLines #cornerBtn:hover{color:var(--ink)}
+#app #gLines .mooring-panel{gap:5px;padding-top:6px}
+/* the hull and its circles */
+#app #gLines .equipment-diagram{width:100%;max-width:none;height:130px;margin:0}
+#app #gLines .equipment-yacht{width:56px;height:126px;top:2px}
+#app #gLines .yacht-hull{fill:rgba(160,205,220,.04);stroke:rgba(160,205,220,.55);stroke-width:1.5}
+#app #gLines .yacht-cabin{fill:rgba(160,205,220,.07);stroke:rgba(160,205,220,.22);stroke-width:1}
+#app #gLines .equipment-point,#app #gLines .ln{width:var(--c);min-width:0;height:var(--c);min-height:0;padding:0;border:1.5px solid rgba(160,205,220,.55);background:rgba(10,30,42,.96);gap:0}
+#app #gLines .equipment-point:hover,#app #gLines .ln:hover{border-color:var(--ink)}
+#app #gLines .ln[data-i="0"]{left:10px;top:12px;right:auto;bottom:auto}#app #gLines .ln[data-i="1"]{right:10px;top:12px;left:auto;bottom:auto}
+#app #gLines .ln[data-i="2"]{left:12px;bottom:0;top:auto;right:auto}#app #gLines .ln[data-i="3"]{right:12px;bottom:0;top:auto;left:auto}
+#app #gLines .ln[data-i="4"]{left:calc(50% - var(--c)/2);top:42px}#app #gLines .ln[data-i="5"]{left:calc(50% - var(--c)/2);top:80px}
+#app #gLines .line-state{font-size:13px;line-height:1}
+#app #gLines .ln:not(.f):not(.t) .line-state{visibility:hidden}
+#app #gLines .ln.t{border-color:var(--amber);color:var(--amber)}
+#app #gLines .ln.f{border-color:var(--stbd);background:rgba(18,64,46,.96);color:var(--stbd)}
+#app #gLines .ln.sel{outline:2px solid var(--amber);outline-offset:1px}
+/* line actions: a thin tension bar, then − heave in, + slack, let go */
+#app #gLines #actBox{gap:5px}
+#app #gLines .line-tension{display:block}
+#app #gLines .line-actions{grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}
+#app #gLines .line-actions .btn,#app #gLines #lgBtn{display:grid;place-items:center;min-width:0;min-height:32px;height:32px;padding:0;grid-column:auto;font-size:20px;font-weight:600;line-height:1}
+@media (pointer:coarse){#app #gLines .line-actions .btn{min-height:38px;height:38px}}
+#app #gLines .line-actions .btn.on{color:#1c1300;background:var(--amber);border-color:var(--amber)}
+/* anchors: the bow with an anchor each side and a pair between them */
+#app #gLines #anchorBody{grid-template-areas:"map" "controls" "goal";grid-template-columns:minmax(0,1fr);gap:5px}
+#app #gLines .anchor-map{gap:0}
+#app #gLines #anchorDiagram{width:100%;height:84px;overflow:hidden}
+#app #gLines #anchorDiagram .equipment-yacht{width:52px;height:118px;max-width:none;top:4px}
+#app #gLines #anchorDiagram [data-anchor="0"]{left:12px;top:16px;right:auto}
+#app #gLines #anchorDiagram [data-anchor="1"]{right:12px;top:16px;left:auto}
+#app #gLines #anchorDiagram[data-mode=bow] [data-anchor="0"]{left:calc(50% - var(--c)/2);top:22px}
+#app #gLines #anchorDiagram [data-anchor="2"]{left:calc(50% - 17px);top:52px;width:34px;height:24px;min-height:0;padding:0;border-radius:12px;display:grid;place-items:center;background:rgba(10,30,42,.96);border:1.5px solid rgba(160,205,220,.4)}
+#app #gLines #anchorDiagram [data-anchor="2"] .tool-icon{width:20px;height:16px;stroke-width:1.5}
+#app #gLines .equipment-point .equipment-icon{width:16px;height:16px}
+#app #gLines .equipment-point.deployed{border-color:var(--stbd);background:rgba(18,64,46,.96);color:var(--stbd)}
+#app #gLines .equipment-point.working{border-color:var(--amber);color:var(--amber);animation:gearPulse 1s ease-in-out infinite alternate}
+#app #gLines .equipment-point.dragging{border-color:var(--port);background:rgba(80,20,16,.9);color:var(--port)}
+#app #gLines [data-anchor][aria-pressed=true],#app #gLines [data-fender][aria-pressed=true]{box-shadow:0 0 0 2px var(--amber)}
+@keyframes gearPulse{from{opacity:1}to{opacity:.55}}
+@media (prefers-reduced-motion:reduce){#app #gLines .equipment-point.working{animation:none}}
+#app #gLines .anchor-controls{gap:4px}
+#app #gLines .anchor-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:3px}
+#app #gLines .anchor-actions .btn{position:relative;min-width:0;min-height:32px;height:32px;padding:0;font-size:0;line-height:0}
+@media (pointer:coarse){#app #gLines .anchor-actions .btn,#app #gLines #chainRow .btn{min-height:38px;height:38px}}
+#app #gLines .anchor-actions .btn::before{content:"";position:absolute;inset:0;margin:auto;width:18px;height:18px;background:currentColor;-webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+#anchDrop{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v15M6 12l6 6 6-6M5 21h14'/%3E%3C/svg%3E")}
+#anchWeigh{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21V6M6 12l6-6 6 6M5 3h14'/%3E%3C/svg%3E")}
+#anchWeigh.on{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='6' y='6' width='12' height='12' rx='2' fill='%23000'/%3E%3C/svg%3E");color:var(--amber);border-color:var(--amber)}
+#app #gLines .anchor-chain-control{gap:0}
+#app #gLines #chainRow,#app.mooring-wide #gLines #chainRow{grid-template-columns:32px minmax(0,1fr) 32px;grid-template-rows:auto;column-gap:3px;align-items:center}
+@media (pointer:coarse){#app #gLines #chainRow,#app.mooring-wide #gLines #chainRow{grid-template-columns:38px minmax(0,1fr) 38px}}
+#app #gLines #chainRow .btn{grid-row:1;height:32px;min-height:32px;font-size:20px}
+#app #gLines #chIn{grid-column:1}#app #gLines #chOut{grid-column:3}
+#app #gLines #anchorChain{grid-row:1;grid-column:2;font-size:13px;line-height:1.05;color:var(--ink)}
+#app #gLines #anchorBody:has(#scopeTx.ok) #anchorChain{color:var(--stbd)}
+#app #gLines #anchorBody:has(#scopeTx.bad) #anchorChain{color:var(--port)}
+#app #gLines .anchor-goal{padding-top:5px}
+#app #gLines .anchor-readout{justify-content:flex-end;font-size:0;line-height:1}
+#app #gLines .anchor-readout strong{font-size:0}
+#app #gLines #anchorNeed{font-size:11px;color:var(--amber)}#app #gLines #anchorNeed::after{content:" m"}
+#app #gLines .anchor-goal.ready #anchorNeed{color:var(--stbd)}
+#app #gLines .anchor-progress{height:4px;margin-top:3px}
+/* fenders: tap either side of the hull */
+#app #gLines #fenderBody{grid-template-columns:minmax(0,1fr)}
+#app #gLines #fenderDiagram [data-fender]{top:38px;width:28px;height:54px;border-radius:14px}
+#app #gLines #fenderDiagram [data-fender="1"]{left:10px;right:auto}#app #gLines #fenderDiagram [data-fender="2"]{right:10px;left:auto}
+#app #gLines #fenderDiagram .equipment-icon{width:18px;height:22px}
+#app #gLines .fender-options{display:none}
+#app #gLines #lnBody{grid-template-columns:minmax(0,1fr);gap:5px}
+/* short landscape: the skinny card needs only a little room, so the helm keeps a sensible width */
+html #app.mooring-split .dock{max-width:470px}
