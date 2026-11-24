@@ -1682,7 +1682,7 @@ let sync=false;const held=Object.create(null),detent=[0,0];
 const inputSources=new Map(),capturedPointers=new Map(),inputResetters=[],bumpResetters=[],mooringBindings=[],bumpOwned=[false,false];
 let holdBinding=0;
 const canDrive=()=>state==='play'&&!hold&&!(S.cineT!=null&&!S.cineDone);
-function capturePointer(el,id){el.setPointerCapture(id);capturedPointers.set(id,el);}
+function capturePointer(el,id){try{el.setPointerCapture(id);}catch(e){/* the pointer already ended */}capturedPointers.set(id,el);}
 function forgetPointer(el,id){if(capturedPointers.get(id)===el)capturedPointers.delete(id);}
 function applyHeldInputs(){
   let thr=0,lineHaul=0,anchorInput=null;const bumps=[null,null];
