@@ -108,3 +108,7 @@ The vendor script selects the `T3.*` exports used in the game, preserves the MIT
 The game engine loads from the same origin. Google Fonts is optional and falls back to system fonts. The shared public play counter runs only at `https://fourstripes.github.io/stern-to/` or its `index.html` URL, gives each request up to thirty seconds and cannot block play. Local development and preview origins do not increment it.
 
 Panel placement, mirroring mode and best scores use local storage. Storage failure is tolerated. Best scores still share the existing berth-based key across vessels and weather settings.
+
+## Licence
+
+Stern-To is released under the [MIT Licence](LICENSE). The bundled Three.js engine keeps its own MIT licence in `vendor/THREE-LICENSE.txt`.
