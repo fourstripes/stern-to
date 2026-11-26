@@ -766,10 +766,13 @@ const sea=new T3.Mesh(seaGeometry(waterTier.segments),new T3.ShaderMaterial({uni
     g+=boil*.3*vec2(sin(p.x*3.1+uT*7.)+sin(p.y*5.3-uT*9.),cos(p.y*2.7-uT*6.3)+cos(p.x*4.7+uT*8.));
     float hd=length(vec2(slx-clamp(slx,-uHull.x+uHull.y,uHull.x-uHull.y),sly))-uHull.y,shade=.4*exp(-max(hd,0.)*.45);
     // swell running into the hull bounces back off it as a short train of ripples, strongest on the weather side
-    // distance to the hull's actual waterline outline: fine bow, parallel sides, square transom
-    float fx0=clamp(slx/uHull.x,-1.,1.),hw0=uHull.y*(fx0>.2?sqrt(max(0.,1.-(fx0-.2)/.8)):fx0<-.9?.92:.97);
-    float dSide=abs(sly)-hw0,dEnd=max(-uHull.x-slx,slx-uHull.x),hd0=length(max(vec2(dSide,dEnd),0.))+min(max(dSide,dEnd),0.);
-    vec2 fwd=uShip.zw,sideN=dEnd>dSide?fwd*(slx<0.?-1.:1.):vec2(-uShip.w,uShip.z)*(sly<0.?-1.:1.);
+    // distance to the hull's actual waterline outline: fine bow, parallel sides, and a transom with rounded corners
+    // like the drawn hull, so the rim of light and ripples wraps the stern instead of drawing a square
+    float fx0=clamp(slx/uHull.x,-1.,1.),hw0=uHull.y*(fx0>.2?sqrt(max(0.,1.-(fx0-.2)/.8)):.95);
+    float rc=uHull.y*.34,dSide=abs(sly)-hw0,dEnd=max(-uHull.x-slx,slx-uHull.x);
+    vec2 qa=vec2(dSide,dEnd)+rc,qp=max(qa,0.);float ql=length(qp),hd0=ql+min(max(qa.x,qa.y),0.)-rc;
+    vec2 nl=ql>1e-4?qp/ql:(dEnd>dSide?vec2(0.,1.):vec2(1.,0.));
+    vec2 fwd=uShip.zw,sideN=normalize(fwd*(slx<0.?-1.:1.)*nl.y+vec2(-uShip.w,uShip.z)*(sly<0.?-1.:1.)*nl.x+1e-5);
     float incid=max(0.,-dot(sideN,uW[0].xy))+.15,nearH=exp(-max(hd0,0.)/1.3)*step(-.2,hd0);
     float swPh=uW[0].z*dot(uW[0].xy,p)-uOm[0]*uT;
     g+=sideN*(uW[0].w*.55+uSlop*.3)*nearH*incid*.45*sin(3.6*max(hd0,0.)-uT*3.4+swPh);
