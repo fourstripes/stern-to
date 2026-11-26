@@ -31,7 +31,9 @@ export function vesselForces(model, state) {
   const { u, v, r } = state;
   const thrust = rpm => (rpm >= 0 ? model.thrustAhead : -model.thrustAstern) * rpm * rpm;
   const port = thrust(state.rpm[0]), starboard = thrust(state.rpm[1]);
-  let X = port + starboard - model.surgeLinear * u - model.surgeQuadratic * u * Math.abs(u);
+  // dragScale lets a hydrofoil shed hull drag once it flies (and carry a little extra over the hump).
+  const drag = state.dragScale ?? 1;
+  let X = port + starboard - drag * (model.surgeLinear * u + model.surgeQuadratic * u * Math.abs(u));
   let Y = -model.swayLinear * v - model.swayQuadratic * v * Math.abs(v);
   let N = (port - starboard) * model.propArm
     - model.yawLinear * r - model.yawQuadratic * r * Math.abs(r)

@@ -72,7 +72,7 @@ function fixture(t, id = 'super') {
 }
 
 const handlingBounds = {
-  tender: { cruise: [26, 29], stop: [35, 65], seconds: [5, 9], diameter: [50, 80], yaw: 26, drift: [4, 14] },
+  tender: { cruise: [29, 33], stop: [35, 70], seconds: [5, 9], diameter: [50, 90], yaw: 26, drift: [4, 14] },
   super: { cruise: [15, 17], stop: [40, 70], seconds: [11, 18], diameter: [85, 130], yaw: 9, drift: [3, 9] },
   ls: { cruise: [16, 18], stop: [65, 105], seconds: [17, 27], diameter: [140, 200], yaw: 6, drift: [2, 8] }
 };
@@ -245,4 +245,24 @@ test('a second secure anchor can satisfy the final goal when the first anchor is
   assert.equal(h.read('anchorageStatus().settled'), true);
   h.run('S.anchors[1].held=false;');
   assert.equal(h.read('anchorageStatus().settled'), false);
+});
+
+test('the foiling tender flies from about 16 kn, lands below about 14 kn and never foils at docking speed', t => {
+  const h = fixture(t, 'tender');
+  const r = h.run(`(() => {
+    const tick=()=>{T+=1/60;step(1/60);parts.length=0;};
+    S.lever=[.25,.25];S.gear=[1,1];for(let i=0;i<3600;i++)tick();
+    const slow={kn:S.u*KN,foil:S.foil,flying:S.foilOn};
+    S.lever=[1,1];let up=null;for(let i=0;i<3600&&up===null;i++){tick();if(S.foilOn)up=S.u*KN;}
+    for(let i=0;i<600;i++)tick();const flying={foil:S.foil,drag:S.dragScale};
+    S.lever=[0,0];let down=null;for(let i=0;i<3600&&down===null;i++){tick();if(!S.foilOn)down=S.u*KN;}
+    for(let i=0;i<120;i++)tick();
+    return {slow,up,flying,down,after:S.foil};
+  })()`);
+  assert.ok(r.slow.kn < 12 && !r.slow.flying && r.slow.foil === 0, `docking speed stayed on the hull: ${JSON.stringify(r.slow)}`);
+  assert.ok(r.up > 15.5 && r.up < 17.5, `take-off at ${r.up} kn`);
+  assert.ok(r.flying.foil === 1 && r.flying.drag < .8, `flying drag ${r.flying.drag}`);
+  assert.ok(r.down > 12.5 && r.down < 14.5, `touch-down at ${r.down} kn`);
+  assert.ok(r.after < .5, 'the hull settles back into the water');
+  assert.deepEqual(h.errors, []);
 });

@@ -1,6 +1,6 @@
 # Stern-To
 
-A browser docking simulator with a 12 m tender, 50 m superyacht and 74 m megayacht. Practise three berths or sail the four-stop mission with wind, swell, traffic, mooring lines, fenders and anchors.
+A browser docking simulator with a 12 m foiling tender, 50 m superyacht and 74 m megayacht. Practise three berths or sail the four-stop mission with wind, swell, traffic, mooring lines, fenders and anchors.
 
 ## Run the game
 
@@ -32,7 +32,7 @@ Open `http://127.0.0.1:8080/` in a current browser with WebGL 2 enabled. The ES 
 | `docs/review-2026-11-23.md` | Review decisions, verification and remaining visual release check |
 | `docs/simulation-review-2026-11-23.md` | Physics calibration, water and traffic changes, anchorage rules and validation |
 
-The core simulation runs at 60 Hz. Vessel dynamics, water sampling and navigation are small modules that can be checked without a browser. The three hulls have distinct calibrated handling; the existing harbours and four-stop mission remain. The twin screws turn outward, so a propeller going astern walks the stern sideways and adds to a split-engine twist. The yachts heel outward in a hard turn and trim slightly by the stern near hull speed; the planing tender banks into its turns and lifts its bow over the hump before settling on the plane. Bow-wave foam spreads along the Kelvin angle, and the wake's crest spacing grows with speed.
+The core simulation runs at 60 Hz. Vessel dynamics, water sampling and navigation are small modules that can be checked without a browser. The three hulls have distinct calibrated handling; the existing harbours and four-stop mission remain. The twin screws turn outward, so a propeller going astern walks the stern sideways and adds to a split-engine twist. The yachts heel outward in a hard turn and trim slightly by the stern near hull speed; the tender is a hydrofoil: drag climbs over the hump, then at about 16 kn the foils lift the hull clear, drag falls away, the ride smooths out and only three carbon struts leave a feather of spray. It carves banked turns while flying and settles back onto its hull below about 14 kn. Bow-wave foam spreads along the Kelvin angle, and the wake's crest spacing grows with speed.
 
 ## Controls
 
