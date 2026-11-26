@@ -14,7 +14,7 @@ const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* ---------- ship ---------- */
 const HULL=[[25,0],[19,2.9],[10,4.5],[-5,4.7],[-25,4.3],[-25,-4.3],[-5,-4.7],[10,-4.5],[19,-2.9]];
 const SHIPS={
- tender:{name:'Tender',spec:'12 m foiler · 9 t · flies from 16 kn · about 38 kn',L:12,B:3.6,m:9e3,tA:16e3,tS:9e3,thr:1.6e3,cd:.3,steeringSpeed:10,rudderScale:3},
+ tender:{name:'Tender',spec:'12 m foiler · 9 t · flies from 16 kn · about 41 kn',L:12,B:3.6,m:9e3,tA:16e3,tS:9e3,thr:1.6e3,cd:.3,steeringSpeed:10,rudderScale:3},
  super:{name:'Superyacht',spec:'50 m · 500 t · 2 × 1,200 kW · about 16 kn',L:50,B:9.4,m:5e5,tA:180e3,tS:125e3,thr:30e3},
  ls:{name:'Megayacht',spec:'74 m · 1,500 t · 2 × 2,000 kW · about 17 kn',L:74,B:12.6,m:1.5e6,tA:360e3,tS:245e3,thr:55e3,cd:.9}};
 // everything below scales from the 50 m boat: SL length, SB beam, MR mass, GEO the harbour, LK line strength
@@ -383,7 +383,7 @@ function step(dt){
      she leaps onto the foils, sheds the drag and the chop, picks up a little extra push and carves tight banked turns.
      Below about 14 kn, or after a hard knock, she drops back onto the hull. */
   if(shipId==='tender'){
-    const was=S.foilOn,chop=clamp(env.sh/1.2,0,1.2)+clamp(windSpd()/20,0,.5)*.5;
+    const was=S.foilOn,chop=Math.min(1.1,clamp(env.sh/1.2,0,1.2)+clamp(windSpd()/20,0,.5)*.5);
     if(S.foilOn&&S.shake>.6){S.foilOn=false;S.foilCrash=S.t;}
     else if(!S.foilOn&&u>8.2&&S.t-(S.foilCrash??-9)>2.5)S.foilOn=true;
     else if(S.foilOn&&u<7.1)S.foilOn=false;
@@ -396,7 +396,10 @@ function step(dt){
     const lift=clamp((u-7.5)/11.5,0,1),rideT=S.foil*(.5+1.7*lift*lift*(3-2*lift));
     S.rideH=(S.rideH||0)+clamp(rideT-(S.rideH||0),-2.2*dt,1.1*dt);const hN=clamp(S.rideH/2.2,0,1);
     S.dragScale=(1+hump+chop*clamp(u/7,0,1)*hullK*(1.1+.9*slam))*(1-.12*S.foil-.3*hN)+chop*.7*S.foil*clamp(1-hN*1.7,0,1)*(.6+.8*slam);
-    S.thrustScale=1+.18*S.foil;S.steeringSpeed=S.foil>.5?15:undefined;
+    /* lots of extra punch at high throttle to bully her over the hump in rough water (docking throttle is unchanged);
+       the boost eases once she is flying high so top speed stays sane */
+    const thr=(Math.abs(S.rpm[0])+Math.abs(S.rpm[1]))/2,punch=.45*clamp((thr-.45)/.55,0,1)*(1-.65*hN);
+    S.thrustScale=(1+punch)*(1+.18*S.foil);S.steeringSpeed=S.foil>.5?15:undefined;
   }else{S.foil=0;S.foilOn=false;S.rideH=0;S.dragScale=1;S.thrustScale=1;S.steeringSpeed=undefined;}
   let {X,Y,N}=vesselForces(physics,S);
   // wind on the topsides, centre of effort forward of midships

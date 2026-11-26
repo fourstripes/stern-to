@@ -72,7 +72,7 @@ function fixture(t, id = 'super') {
 }
 
 const handlingBounds = {
-  tender: { cruise: [34, 40], stop: [45, 90], seconds: [5, 10], diameter: [28, 70], yaw: 42, drift: [4, 14] },
+  tender: { cruise: [37, 45], stop: [45, 100], seconds: [5, 11], diameter: [28, 80], yaw: 42, drift: [4, 14] },
   super: { cruise: [15, 17], stop: [40, 70], seconds: [11, 18], diameter: [85, 130], yaw: 9, drift: [3, 9] },
   ls: { cruise: [16, 18], stop: [65, 105], seconds: [17, 27], diameter: [140, 200], yaw: 6, drift: [2, 8] }
 };
@@ -274,7 +274,8 @@ test('chop drags the foiler on its hull, but once it flies the sea no longer slo
     for(let i=0;i<60*30;i++){tick();t+=1/60;if(up===null&&S.foilOn)up=t;}
     return {up,kn:S.u*KN};
   })()`); };
-  const calm = run(0), rough = run(1.2);
-  assert.ok(rough.up > calm.up * 1.8, `rough take-off ${rough.up}s vs calm ${calm.up}s`);
+  const calm = run(0), rough = run(1.2), gale = run(2);
+  assert.ok(rough.up > calm.up * 1.15, `rough take-off ${rough.up}s vs calm ${calm.up}s`);
+  assert.ok(gale.up !== null && gale.up < 6, `full power still gets her flying in a gale: ${gale.up}s`);
   assert.ok(Math.abs(rough.kn - calm.kn) < 2, `flying speed ${rough.kn} vs ${calm.kn} kn`);
 });
