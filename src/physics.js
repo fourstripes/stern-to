@@ -29,7 +29,8 @@ export function createVesselPhysics(ship) {
 
 export function vesselForces(model, state) {
   const { u, v, r } = state;
-  const thrust = rpm => (rpm >= 0 ? model.thrustAhead : -model.thrustAstern) * rpm * rpm;
+  const boost = state.thrustScale ?? 1;
+  const thrust = rpm => (rpm >= 0 ? model.thrustAhead : -model.thrustAstern) * rpm * rpm * boost;
   const port = thrust(state.rpm[0]), starboard = thrust(state.rpm[1]);
   // dragScale lets a hydrofoil shed hull drag once it flies (and carry a little extra over the hump).
   const drag = state.dragScale ?? 1;
@@ -51,7 +52,7 @@ export function vesselForces(model, state) {
   // Resolve the local flow normal to the rudder, including stern motion.
   // Without prop wash, F dot velocity is always <= 0. The induced axial drag
   // prevents a rudder from creating energy while it turns a coasting boat.
-  const delta = state.rud * DEG / (1 + (u / model.steeringSpeed) ** 2);
+  const delta = state.rud * DEG / (1 + (u / (state.steeringSpeed ?? model.steeringSpeed)) ** 2);
   const sin = Math.sin(delta), cos = Math.cos(delta);
   const flowSquared = u * Math.abs(u)
     + .45 * (Math.max(port, 0) + Math.max(starboard, 0)) / model.rudderCoefficient;

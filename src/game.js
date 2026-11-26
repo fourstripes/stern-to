@@ -1,6 +1,6 @@
 import * as T3 from '../vendor/three.module.min.js';
 import { FIXED_STEP, MAX_FRAME_TIME, planSimulationSteps, renderPixelRatio, AdaptiveQuality } from './runtime.js';
-import { createVesselPhysics, vesselForces, bodyAcceleration, resolveContact } from './physics.js?v=20261126-foil';
+import { createVesselPhysics, vesselForces, bodyAcceleration, resolveContact } from './physics.js?v=20261126-arcadefoil';
 import { planTrafficStep, planWaterRoute, segmentClear, navigationAdvice } from './navigation.js?v=20261123-simulation';
 import { buildWaves, sampleWater, stepDampedSpring, foamParameters, waterQuality, WATER_GLSL } from './water.js?v=20261123-simulation';
 
@@ -14,7 +14,7 @@ const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* ---------- ship ---------- */
 const HULL=[[25,0],[19,2.9],[10,4.5],[-5,4.7],[-25,4.3],[-25,-4.3],[-5,-4.7],[10,-4.5],[19,-2.9]];
 const SHIPS={
- tender:{name:'Tender',spec:'12 m foiler · 9 t · flies from 16 kn · about 31 kn',L:12,B:3.6,m:9e3,tA:16e3,tS:9e3,thr:1.6e3,cd:.3,steeringSpeed:10,rudderScale:3},
+ tender:{name:'Tender',spec:'12 m foiler · 9 t · flies from 16 kn · about 37 kn',L:12,B:3.6,m:9e3,tA:16e3,tS:9e3,thr:1.6e3,cd:.3,steeringSpeed:10,rudderScale:3},
  super:{name:'Superyacht',spec:'50 m · 500 t · 2 × 1,200 kW · about 16 kn',L:50,B:9.4,m:5e5,tA:180e3,tS:125e3,thr:30e3},
  ls:{name:'Megayacht',spec:'74 m · 1,500 t · 2 × 2,000 kW · about 17 kn',L:74,B:12.6,m:1.5e6,tA:360e3,tS:245e3,thr:55e3,cd:.9}};
 // everything below scales from the 50 m boat: SL length, SB beam, MR mass, GEO the harbour, LK line strength
@@ -221,7 +221,7 @@ function reset(){
   if(U.uNight.value)applyNight(0);
   physGood=null;physWarned=false;
   const s=LV.start;
-  S={x:s[0]*GEO,y:s[1]*GEO,foil:0,foilOn:false,dragScale:1,stage:0,svc:null,dmgBank:0,mode:'arrive',voyage:false,legT0:0,legHits0:0,passing:false,fend:0,fendN:[0,0],fStress:[0,0],fSq:[0,0],fPop:[0,0,0,0,0,0,0,0],boom:null,bowX:19.5,weigh:{'-1':0,'0':0,'1':0},anchors:[],anchSel:0,anchorCmd:false,fire:null,done:false,wreck:false,psi:s[2]*D2R,u:0,v:0,r:0,lever:[0,0],rpm:[0,0],gear:[0,0],clutch:[0,0],thr:0,thrAct:0,rud:0,
+  S={x:s[0]*GEO,y:s[1]*GEO,foil:0,foilOn:false,dragScale:1,foilH:0,foilVH:0,stage:0,svc:null,dmgBank:0,mode:'arrive',voyage:false,legT0:0,legHits0:0,passing:false,fend:0,fendN:[0,0],fStress:[0,0],fSq:[0,0],fPop:[0,0,0,0,0,0,0,0],boom:null,bowX:19.5,weigh:{'-1':0,'0':0,'1':0},anchors:[],anchSel:0,anchorCmd:false,fire:null,done:false,wreck:false,psi:s[2]*D2R,u:0,v:0,r:0,lever:[0,0],rpm:[0,0],gear:[0,0],clutch:[0,0],thr:0,thrAct:0,rud:0,
      damage:0,hits:0,t:0,hold:0,inPos:false,lastTouch:-9,roll:0,shake:0};
   parts=[];$('rud').value=0;cam.x=S.x;cam.y=S.y;
   lines=LINE_DEF.map((d,i)=>({i,name:d[0],kind:d[3],a:d[1]*SL,b:d[2]*SB,state:'stowed',bol:null,L0:0,t:0,ten:0,strain:0,fx:S.x,fy:S.y,ready:false,dist:999,prog:0,reach:0,good:false}));S.bowY=0;sel=-1;haul=0;anchorHold=null;$('result').hidden=true;
@@ -379,17 +379,21 @@ function step(dt){
   S.thrAct+=clamp(S.thr-S.thrAct,-2.5*dt,2.5*dt);
   const cs=Math.cos(S.psi),sn=Math.sin(S.psi),u=S.u,v=S.v,r=S.r;
   const S2=SL*SL;
-  /* Hydrofoil tender: the foils lift the hull clear at about 16 kn and set it back down below about 14 kn.
-     Drag climbs over the hump just before take-off, then falls away once only the struts touch the water. */
+  /* Hydrofoil tender, tuned for fun. On the hull, chop and the hump drag at her and she labours; at about 16 kn
+     she leaps onto the foils, sheds the drag and the chop, picks up a little extra push and carves tight banked turns.
+     Below about 14 kn, or after a hard knock, she drops back onto the hull. */
   if(shipId==='tender'){
-    const was=S.foilOn;
+    const was=S.foilOn,chop=clamp(env.sh/1.2,0,1.2)+clamp(windSpd()/20,0,.5)*.5;
     if(S.foilOn&&S.shake>.6){S.foilOn=false;S.foilCrash=S.t;}
     else if(!S.foilOn&&u>8.2&&S.t-(S.foilCrash??-9)>2.5)S.foilOn=true;
     else if(S.foilOn&&u<7.1)S.foilOn=false;
-    S.foil=clamp((S.foil||0)+(S.foilOn?dt/1.4:-dt/.7),0,1);
+    S.foil=clamp((S.foil||0)+(S.foilOn?dt/.9:-dt/.6),0,1);
     if(S.foilOn!==was&&state==='play')toast(S.foilOn?'Up on the foils':'Off the foils',1100);
-    S.dragScale=(1+(S.foilOn?0:.22*clamp((u-5.5)/2.7,0,1)))*(1-.24*S.foil);
-  }else{S.foil=0;S.foilOn=false;S.dragScale=1;}
+    const hullK=1-S.foil,hump=S.foilOn?0:.35*clamp((u-5)/3.2,0,1);
+    const slam=Math.pow(Math.max(0,Math.sin(S.t*3.3)),3); /* each sea she slams into knocks her back */
+    S.dragScale=(1+hump+chop*clamp(u/7,0,1)*hullK*(1.1+.9*slam))*(1-.38*S.foil);
+    S.thrustScale=1+.18*S.foil;S.steeringSpeed=S.foil>.5?15:undefined;
+  }else{S.foil=0;S.foilOn=false;S.dragScale=1;S.thrustScale=1;S.steeringSpeed=undefined;}
   let {X,Y,N}=vesselForces(physics,S);
   // wind on the topsides, centre of effort forward of midships
   const wd=windTo(),ws=windSpd(),vx=u*cs-v*sn,vy=u*sn+v*cs;
@@ -513,7 +517,9 @@ function step(dt){
     for(let j=cnt(Math.abs(u)*20*dt);j--;)emit(0,u>0?-25.5:24,rnd(-3.8,3.8),-u*.25,0,2.4,rnd(8,14),.6);
     /* a planing hull leaves a broad white trail where the hull and props have thrown the water up */
     /* flying, only the three carbon struts cut the surface: each leaves a thin feather of spray */
-    if(S.foil>.05)for(const [fa,fb] of [[6.7,-1.96],[6.7,1.96],[-21.7,0]])for(let j=cnt(S.foil*Math.min(1,u/12)*26*dt);j--;)emit(1,fa+rnd(-.6,.2),fb+rnd(-.3,.3),-u*.1,(fb?Math.sign(fb):Math.random()<.5?-1:1)*rnd(.3,1.1),rnd(.5,.85),rnd(1.1,2),.25);
+    if(S.foil>.05){const k=S.foil*Math.min(1,u/10);
+      for(const fb of [-1.96,1.96])for(let j=cnt(k*16*dt);j--;)emit(1,6.7+rnd(-.6,.2),fb+rnd(-.3,.3),-u*.1,Math.sign(fb)*rnd(.3,1.1),rnd(.5,.85),rnd(1.1,2),.25);
+      for(let j=cnt(k*75*dt);j--;)emit(1,-21.7+rnd(-.6,.4),rnd(-.5,.5),-u*.2,rnd(-.6,.6),rnd(1.2,1.9),rnd(2.6,4.4),.38);} /* the rear strut throws a long white sheet */
     if(shipId==='tender'&&u>5){const k=clamp((u-5)/8,0,1)*(1-S.foil);for(let j=cnt(k*55*dt);j--;)emit(1,-26+rnd(-1,1),rnd(-3.6,3.6),-u*.12,rnd(-.7,.7),rnd(2,3.2),rnd(2.5,4.5),.45);}
   }
   if(sp>1.1){const k=Math.min(1,(sp-1.1)/3);
@@ -903,20 +909,27 @@ function makeFigure(shirt){
   g.add(legs,body,head);g.scale.setScalar(.7);return g;
 }
 function makeTender(){
+  /* a sleek foiling day boat: long low hull, thin dark sheer line, tan deck and a dark glass canopy */
   const g=new T3.Group(),sx=12/50,sy=3.6/9.4,add=(geo,m)=>g.add(new T3.Mesh(geo,m));
-  add(slabG(hullShape(sx,sy),1.1,-.45),M('#f4f6f7',.4));add(slabG(hullShape(sx*1.004,sy*1.02),.2,-.15),M('#0f2a3a',.5));
-  add(slabG(hullShape(sx*.93,sy*.82),1.14,1),M('#d2b07c',.85));
-  add(slabG(rrShape(-1.2,-.75,2.2,1.5,.3),2,1.1),M('#e8edf0',.5));add(slabG(rrShape(.75,-.8,.3,1.6,.1),2.55,1.95),M('#0c1821',.12));
-  add(slabG(rrShape(-1.9,-1,3.4,2,.4),3.15,3.05),M('#ffffff',.45));add(slabG(rrShape(-4.7,-1.2,1.5,2.4,.3),1.55,1.1),M('#efe9da',.8));
-  for(const [x,z] of [[-1.6,-.85],[-1.6,.85],[1.2,-.85],[1.2,.85]])add(new T3.CylinderGeometry(.05,.05,1.95,6).translate(x,2.08,z),M('#aeb9c0',.4));
-  /* hydrofoils in carbon: a main wing on two forward struts, and a rear strut carrying the stabiliser and twin pods */
+  add(slabG(hullShape(sx,sy),1.1,-.45),M('#dddfda',.32));
+  add(slabG(hullShape(sx*1.004,sy*1.02),-.08,-.46),M('#b4b8b3',.4));
+  add(slabG(hullShape(sx*1.004,sy*1.015),.9,.85),M('#161b1f',.4));
+  add(slabG(hullShape(sx*.93,sy*.84),1.14,1),M('#c9a77a',.85));
+  /* low glass canopy, raked fore and aft, under a thin dark roof */
+  const glass=new T3.MeshStandardMaterial({color:col('#7d9099'),roughness:.18,metalness:0}),frame=M('#262c31',.35);
+  const rake=(geo,x0,x1,yb,k)=>{const pa=geo.attributes.position,mid=(x0+x1)/2;for(let i=0;i<pa.count;i++)if(pa.getY(i)>yb+.01)pa.setX(i,mid+(pa.getX(i)-mid)*k);pa.needsUpdate=true;geo.computeVertexNormals();return geo;};
+  add(rake(slabG(rrShape(-4.5,-1.28,5.3,2.56,.6),1.86,1.12),-4.5,.8,1.12,.88),glass);
+  add(rake(slabG(rrShape(-4.62,-1.33,5.5,2.66,.62),1.93,1.85),-4.62,.88,1.84,.8),frame);
+  add(slabG(rrShape(1.5,-1.12,.16,2.24,.08),1.52,1.12),glass);
+  add(slabG(rrShape(-5.6,-1.25,1,2.5,.25),1.32,1.12),M('#e9e2d2',.8));
+  /* carbon foils on long struts: a main wing on two forward struts, a rear strut with the stabiliser and twin pods */
   const cf=M('#151b20',.32),tip=M('#ffb547',.5);
-  for(const z of [-.75,.75])add(new T3.BoxGeometry(.32,1.6,.07).translate(1.6,-1.2,z),cf);
-  add(new T3.BoxGeometry(.52,.07,3.1).translate(1.6,-2,0),cf);
-  for(const z of [-1.55,1.55])add(new T3.BoxGeometry(.5,.18,.05).translate(1.6,-1.93,z),tip);
-  add(new T3.BoxGeometry(.38,1.6,.08).translate(-5.2,-1.2,0),cf);
-  add(new T3.BoxGeometry(.4,.06,1.6).translate(-5.2,-2.02,0),cf);
-  for(const z of [-.74,.74]){add(new T3.CylinderGeometry(.12,.09,.85,12).rotateZ(Math.PI/2).translate(-5.12,-2.02,z),cf);add(new T3.CylinderGeometry(.21,.21,.03,14).rotateZ(Math.PI/2).translate(-5.6,-2.02,z),tip);}
+  for(const z of [-.75,.75])add(new T3.BoxGeometry(.3,2.15,.07).translate(1.6,-1.52,z),cf);
+  add(new T3.BoxGeometry(.52,.07,3.1).translate(1.6,-2.6,0),cf);
+  for(const z of [-1.55,1.55])add(new T3.BoxGeometry(.5,.18,.05).translate(1.6,-2.53,z),tip);
+  add(new T3.BoxGeometry(.38,2.15,.08).translate(-5.2,-1.52,0),cf);
+  add(new T3.BoxGeometry(.4,.06,1.6).translate(-5.2,-2.62,0),cf);
+  for(const z of [-.74,.74]){add(new T3.CylinderGeometry(.12,.09,.85,12).rotateZ(Math.PI/2).translate(-5.12,-2.62,z),cf);add(new T3.CylinderGeometry(.21,.21,.03,14).rotateZ(Math.PI/2).translate(-5.6,-2.62,z),tip);}
   return g;
 }
 const own=new T3.Group();own.rotation.order='YZX';scene3.add(own);
@@ -953,12 +966,12 @@ function buildOwn(){
   own.add(ownModel);deckY=tender?1.14:3.38*hs;
   crew.forEach(f=>f.scale.setScalar(.7));
   crew[1].position.set(-22.5*SL,deckY,-2.8*SB);crew[2].position.set(-22.5*SL,deckY,2.8*SB);
-  if(tender){lampP.position.set(1,2.9,-1.2);lampS.position.set(1,2.9,1.2);}else{lampP.position.set(13*SL,6.3*hs,-3.9*SB);lampS.position.set(13*SL,6.3*hs,3.9*SB);}
+  if(tender){lampP.position.set(.4,2.02,-1.2);lampS.position.set(.4,2.02,1.2);}else{lampP.position.set(13*SL,6.3*hs,-3.9*SB);lampS.position.set(13*SL,6.3*hs,3.9*SB);}
   anchorM.scale.setScalar(tender?.32:.62);anchorM2.scale.setScalar(.62);anchorM2.visible=!tender;
   const hx=(HAWSE.x+Math.sin(HAWSE.yaw)*HAWSE.depth/2)*SL,hy=(HAWSE.y+HAWSE.eye)*hs,hz=(HAWSE.z+Math.cos(HAWSE.yaw)*HAWSE.depth/2)*SB;
   anchorHawse[0].position.set(tender?LEN/2:hx,tender?1.1:hy,tender?0:-hz);anchorHawse[1].position.set(hx,hy,hz);
-  lampP.scale.setScalar(tender?.4:1);lampS.scale.setScalar(tender?.4:1);
-  lampM.position.set(tender?1:2.6*SL,tender?3.3:11.75*hs,0);lampA.position.set(tender?-5.8:-25*SL,tender?1.4:deckY+.7,0);anchMast.position.set(tender?0:-8*SL,tender?3.1:10.65*hs,0);anchMast.scale.x=anchMast.scale.z=tender?.5:1;
+  lampP.scale.setScalar(tender?.4:1);lampS.scale.setScalar(tender?.4:1);lampM.scale.setScalar(tender?.45:1);
+  lampM.position.set(tender?-1.6:2.6*SL,tender?2.2:11.75*hs,0);lampA.position.set(tender?-5.8:-25*SL,tender?1.4:deckY+.7,0);anchMast.position.set(tender?-2.2:-8*SL,tender?2.08:10.65*hs,0);anchMast.scale.x=anchMast.scale.z=tender?.5:1;
   while(fenderG.children.length){const ch=fenderG.children[0];fenderG.remove(ch);ch.geometry.dispose();}
   // long fenders hanging from the rail to the waterline, so they sit between hull and quay
   const fr=tender?.16:.42,fl=tender?.85:2.3;FEND_D=fr*1.8;
@@ -1395,11 +1408,11 @@ function sync3D(dt){
      by the stern as they approach hull speed. The planing tender banks into its turns, and lifts its bow over the
      hump before settling flatter once it is on the plane. */
   const fr=Math.max(0,S.u)/Math.sqrt(9.81*LEN),ac=S.u*S.r,ss=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
-  const fl=S.foil||0; /* foiling, the tender carves banked turns like an aircraft */
-  const heel=shipId==='tender'?-clamp(ac*(.05+.035*fl),-(.14+.2*fl),.14+.2*fl):clamp(ac*.055,-.07,.07);
-  const trim=clamp(ownDyn.acc*.03,-.04,.04)+(shipId==='tender'?.09*ss(.2,.5,fr)*(1-.55*ss(.55,1,fr))*(1-fl)+.2*fl*(1-fl)+.012*fl:.012*ss(.12,.4,fr));
+  const fl=S.foil||0; /* flying, the tender throws itself into banked turns */
+  const heel=shipId==='tender'?-clamp(ac*(.05+.06*fl),-(.14+.3*fl),.14+.3*fl):clamp(ac*.055,-.07,.07);
+  const trim=clamp(ownDyn.acc*.03,-.04,.04)+(shipId==='tender'?.09*ss(.2,.5,fr)*(1-.55*ss(.55,1,fr))*(1-fl)+.38*fl*(1-fl)+.02*fl:.012*ss(.12,.4,fr));
   if(!isFinite(ownDyn.y+ownDyn.rx+ownDyn.rz+ownDyn.acc))Object.assign(ownDyn,newDyn());
-  pose(own,ownDyn,RX,RY,RP,LEN,BEAM,S.roll*.6+heel-(S.listV||0),trim,dt,1-.75*fl);own.position.y+=fl*.95; /* the foils smooth out the sea and hold the hull clear */
+  pose(own,ownDyn,RX,RY,RP,LEN,BEAM,S.roll*.6+heel-(S.listV||0),trim,dt,1-.75*fl);stepDampedSpring(S,'foilH','foilVH',fl*1.7-Math.abs(heel)*1.1*fl,6.5,.38,dt);own.position.y+=S.foilH; /* she leaps up with a bounce, flies high and sinks on the inside of a hard turn */
   if(ownModel&&ownModel.userData.radar)ownModel.userData.radar.rotation.y+=dt*2.6;
   for(const o of obstacles)if(o.kind==='boat'&&o.mesh.userData.radar)o.mesh.userData.radar.rotation.y+=dt*2.2;
   for(const q of buoys)if(q.m){const water=waveSampleAt(q.x,q.y);q.m.position.y=water.height-.2;q.m.rotation.x=clamp(-Math.atan(water.slopeZ),-.25,.25);q.m.rotation.z=clamp(Math.atan(water.slopeX),-.25,.25);}
@@ -1641,7 +1654,7 @@ function advanceDeckWork(dt){
   S.bowY+=clamp((S.anchorCmd||S.anchors.some(a=>!a.held)?0:by)-S.bowY,-1.5*dt,1.5*dt);
   // bow hand walks forward to let the anchor go
   /* crew go inside while she is under way, and come back out as she nears the berth or there is work on deck */
-  var goIn=shipId!=='tender'&&Math.hypot(slip.x-S.x,slip.y-S.y)>Math.max(80,LEN*1.8)&&!lines.some(l=>l.state!=='stowed')&&!S.anchors.length&&!S.anchorCmd&&!S.fend&&S.fendN[0]+S.fendN[1]<.01;
+  var goIn=Math.hypot(slip.x-S.x,slip.y-S.y)>Math.max(80,LEN*1.8)&&!lines.some(l=>l.state!=='stowed')&&!S.anchors.length&&!S.anchorCmd&&!S.fend&&S.fendN[0]+S.fendN[1]<.01;
   /* the bow hand only comes out to work the anchor or a bow line, then goes back in */
   const bowWork=S.anchorCmd||S.anchors.some(a=>!a.held||a.weighing)||[0,1].some(i=>{const st=lines[i].state;return st==='throw'||st==='haul'||st==='queued';});
   const bxT=S.anchorCmd||S.anchors.some(a=>!a.held)?23.2:bowWork?19.5:13.8;S.bowX+=clamp(bxT-S.bowX,-3*dt/SL,3*dt/SL);

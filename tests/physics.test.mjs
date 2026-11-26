@@ -72,7 +72,7 @@ function fixture(t, id = 'super') {
 }
 
 const handlingBounds = {
-  tender: { cruise: [29, 33], stop: [35, 70], seconds: [5, 9], diameter: [50, 90], yaw: 26, drift: [4, 14] },
+  tender: { cruise: [34, 40], stop: [45, 90], seconds: [5, 10], diameter: [28, 70], yaw: 42, drift: [4, 14] },
   super: { cruise: [15, 17], stop: [40, 70], seconds: [11, 18], diameter: [85, 130], yaw: 9, drift: [3, 9] },
   ls: { cruise: [16, 18], stop: [65, 105], seconds: [17, 27], diameter: [140, 200], yaw: 6, drift: [2, 8] }
 };
@@ -265,4 +265,16 @@ test('the foiling tender flies from about 16 kn, lands below about 14 kn and nev
   assert.ok(r.down > 12.5 && r.down < 14.5, `touch-down at ${r.down} kn`);
   assert.ok(r.after < .5, 'the hull settles back into the water');
   assert.deepEqual(h.errors, []);
+});
+
+test('chop drags the foiler on its hull, but once it flies the sea no longer slows it', t => {
+  const run = sh => { const h = fixture(t, 'tender'); return h.run(`(() => {
+    env.wk=${sh}*15;env.sh=${sh};const tick=()=>{T+=1/60;step(1/60);parts.length=0;};
+    S.lever=[1,1];S.gear=[1,1];S.rpm=[1,1];let t=0,up=null;
+    for(let i=0;i<60*30;i++){tick();t+=1/60;if(up===null&&S.foilOn)up=t;}
+    return {up,kn:S.u*KN};
+  })()`); };
+  const calm = run(0), rough = run(1.2);
+  assert.ok(rough.up > calm.up * 1.8, `rough take-off ${rough.up}s vs calm ${calm.up}s`);
+  assert.ok(Math.abs(rough.kn - calm.kn) < 2, `flying speed ${rough.kn} vs ${calm.kn} kn`);
 });
