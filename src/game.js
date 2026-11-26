@@ -764,14 +764,14 @@ const sea=new T3.Mesh(seaGeometry(waterTier.segments),new T3.ShaderMaterial({uni
     vec2 sd=p-uShip.xy;float slx=dot(sd,uShip.zw),sly=dot(sd,vec2(-uShip.w,uShip.z));
     float boil=abs(uProp.x)*exp(-SQ((slx-(uProp.x>0.?-uHull.x-5.:-uHull.x+7.))/7.)-SQ(sly/(uHull.y*1.1)));
     g+=boil*.3*vec2(sin(p.x*3.1+uT*7.)+sin(p.y*5.3-uT*9.),cos(p.y*2.7-uT*6.3)+cos(p.x*4.7+uT*8.));
-    float hd=length(vec2(slx-clamp(slx,-uHull.x+uHull.y,uHull.x-uHull.y),sly))-uHull.y,shade=.4*exp(-max(hd,0.)*.45);
     // swell running into the hull bounces back off it as a short train of ripples, strongest on the weather side
     // distance to the hull's actual waterline outline: fine bow, parallel sides, and a transom with rounded corners
     // like the drawn hull, so the rim of light and ripples wraps the stern instead of drawing a square
-    float fx0=clamp(slx/uHull.x,-1.,1.),hw0=uHull.y*(fx0>.2?sqrt(max(0.,1.-(fx0-.2)/.8)):.95);
+    float fx0=clamp(slx/uHull.x,-1.,1.),hw0=uHull.y*(fx0>.1?1.-pow((fx0-.1)/.9,2.15):.93+.07*clamp(fx0+.9,0.,1.)); /* fitted to the drawn hull: fine bow, slight taper aft */
     float rc=uHull.y*.34,dSide=abs(sly)-hw0,dEnd=max(-uHull.x-slx,slx-uHull.x);
     vec2 qa=vec2(dSide,dEnd)+rc,qp=max(qa,0.);float ql=length(qp),hd0=ql+min(max(qa.x,qa.y),0.)-rc;
     vec2 nl=ql>1e-4?qp/ql:(dEnd>dSide?vec2(0.,1.):vec2(1.,0.));
+    float shade=.4*exp(-max(hd0,0.)*.45); /* the hull's shadow on the water hugs its real outline, bow included */
     vec2 fwd=uShip.zw,sideN=normalize(fwd*(slx<0.?-1.:1.)*nl.y+vec2(-uShip.w,uShip.z)*(sly<0.?-1.:1.)*nl.x+1e-5);
     float incid=max(0.,-dot(sideN,uW[0].xy))+.15,nearH=exp(-max(hd0,0.)/1.3)*step(-.2,hd0);
     float swPh=uW[0].z*dot(uW[0].xy,p)-uOm[0]*uT;
@@ -875,7 +875,7 @@ const RADAR_G=new T3.BoxGeometry(2.3,.13,.3);
 [-1,1].forEach(sd=>YG.push([new T3.BoxGeometry(.95,.34,.1).translate(-19,.46,sd*4.43),'pocket']));
 /* line fairleads sit on the drawn hull side, half let into it */
 const HULL_SIDE=(()=>{const pts=hullShape(1,1).getPoints(120).filter(p=>p.y>=0);return x=>{let w=0;for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];if(a.x!==b.x&&(a.x-x)*(b.x-x)<=0)w=Math.max(w,a.y+(b.y-a.y)*(x-a.x)/(b.x-a.x));}return w;};})();
-[21,9,-11,-23.5].forEach(x=>[-1,1].forEach(sd=>YG.push([new T3.BoxGeometry(.75,.32,.14).translate(x,2.92+SHEER(x),sd*(HULL_SIDE(x)+.02)),'pocket'])));
+[21,9,-11,-23.5].forEach(x=>[-1,1].forEach(sd=>YG.push([new T3.CylinderGeometry(.5,.5,.14,18).rotateX(Math.PI/2).scale(.78,.34,1).translate(x,2.92+SHEER(x),sd*(HULL_SIDE(x)+.02)),'pocket']))); /* oval fairleads */
 YG.forEach(([g,key],i)=>{if(i>2&&key!=='pool')return;const pa=g.attributes.position;
   for(let k=0;k<pa.count;k++){const x=pa.getX(k),y=pa.getY(k);if(y>0)pa.setY(k,y+SHEER(x)*Math.min(1,y/3.2));}
   pa.needsUpdate=true;g.computeVertexNormals();});
@@ -996,7 +996,7 @@ function buildOwn(){
   const hx=(HAWSE.x+Math.sin(HAWSE.yaw)*HAWSE.depth/2)*SL,hy=(HAWSE.y+HAWSE.eye)*hs,hz=(HAWSE.z+Math.cos(HAWSE.yaw)*HAWSE.depth/2)*SB;
   anchorHawse[0].position.set(tender?LEN/2:hx,tender?1.1:hy,tender?0:-hz);anchorHawse[1].position.set(hx,hy,hz);
   lampP.scale.setScalar(tender?.4:1);lampS.scale.setScalar(tender?.4:1);lampM.scale.setScalar(tender?.45:1);
-  lampM.position.set(tender?-1.6:2.6*SL,tender?2.2:11.75*hs,0);lampA.position.set(tender?-5.8:-25*SL,tender?1.4:deckY+.7,0);anchMast.position.set(tender?-2.2:-8*SL,tender?2.08:10.65*hs,0);anchMast.scale.x=anchMast.scale.z=tender?.5:1;
+  lampM.position.set(tender?-1.6:2.6*SL,tender?2.2:11.75*hs,0);lampA.position.set(tender?-5.8:-17.15*SL,tender?1.4:5.95*hs,0); /* stern light on the aft edge of the first deck level */anchMast.position.set(tender?-2.2:-8*SL,tender?2.08:10.65*hs,0);anchMast.scale.x=anchMast.scale.z=tender?.5:1;
   while(fenderG.children.length){const ch=fenderG.children[0];fenderG.remove(ch);ch.geometry.dispose();}
   // long fenders hanging from the rail to the waterline, so they sit between hull and quay
   const fr=tender?.16:.42,fl=tender?.85:2.3;FEND_D=fr*1.8;
@@ -1511,7 +1511,9 @@ function sync3D(dt){
       const tanA=dh/rise*Math.pow(taut,1.3),drop=Math.max(.5,v3a.y+2.5);
       v3d.set(A.x,v3a.y,A.y);own.worldToLocal(v3d);let lx=v3d.x-hp.x,lz=v3d.z-hp.z;const ll=Math.hypot(lx,lz);
       const out=Math.min(drop*tanA,dh);lx=ll>1e-4?lx/ll*out:0;lz=ll>1e-4?lz/ll*out:0;
-      if(!tnd&&lz*sd<.35)lz=sd*.35; // hang just clear of the hull side and its flare
+      if(!tnd){ /* hang just clear of the hull side: when the chain leads aft, where the hull widens, push it out far enough to clear it */
+        const hz0=Math.abs(hp.z),clr=x=>HULL_SIDE(clamp(x/SL,-25,25))*SB+.3-hz0,xe=hp.x+lx,xm=hp.x+lx*.5;
+        const need=Math.max(.35,clr(xe),2*clr(xm),clr(hp.x+lx*.25)*4);if(lz*sd<need)lz=sd*need;}
       v3b.set(hp.x+lx,hp.y-drop,hp.z+lz);own.localToWorld(v3b);v3b.y=-2.5;
     }
     const span=v3a.distanceTo(v3b);if(span<1e-5)continue;
