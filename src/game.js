@@ -1022,9 +1022,9 @@ function updateSmoke(dt){
       const sd=Math.random()<pPort?-1:1,weather=(sd<0)===(Q.bias>0),ph=Math.pow(Math.random(),.7)*Math.min(1,Q.t/Q.dur);
       const xm=LEN/2-(.4+Math.pow(Math.random(),.8)*5)*SL,lift=.2+ph*2.2*SL*Q.peak*rnd(.5,1);
       v3a.set(xm,lift,sd*(hullHW(xm)*.85+.25)).applyMatrix4(own.matrixWorld);const q=puff(v3a.x,v3a.y,v3a.z,false);if(!q)break;
-      const mist=Math.random()<.3,side=weather?1.25:.55,out=rnd(.4,2)*side,up=(rnd(1.2,4)+ph*3.2*Q.peak)*(.7+.3*Q.k)*side;
+      const mist=Math.random()<.94,side=weather?1.25:.55,out=rnd(.4,2)*side,up=(rnd(1.2,4)+ph*3.2*Q.peak)*(.7+.3*Q.k)*side;
       q.spray=true;q.mist=mist;q.dr=mist?rnd(1.2,2):rnd(.4,.9);q.g=mist?3:9.8;
-      q.streak=!mist;if(!mist)q.sp.material.map=streakTex;q.sp.material.color.setHex(mist?0xe7eef1:0xf4f8f9);q.life=q.max=mist?rnd(1.4,2.4):rnd(.7,1.3);q.s=(mist?rnd(.9,1.8):rnd(.3,.75))*(.75+.25*Math.min(1.4,Q.k));
+      q.streak=!mist;if(!mist)q.sp.material.map=streakTex;q.sp.material.color.setHex(mist?0xe7eef1:0xf4f8f9);q.life=q.max=mist?rnd(1.2,2):rnd(.5,.8);q.s=(mist?rnd(.4,.85):rnd(.15,.3))*(.75+.25*Math.min(1.4,Q.k));
       q.vx=bvx*.85-s0*sd*out;q.vz=bvz*.85+c0*sd*out;q.vy=up*(mist?.7:1);}
     if(Q.t>Q.dur)S.sprayQ=null;}
   // exhaust outlets low on each side, aft: bubbles when a sea covers them; one subtle black plume when the throttles hit full
@@ -1066,7 +1066,7 @@ function updateSmoke(dt){
         const dx=(v3b.x-v3a.x)*AW,dy=(v3b.y-v3a.y)*AH,spd=Math.hypot(q.vx,q.vy,q.vz);q.sp.material.rotation=Math.atan2(dy,dx);
         const L=q.s*(2.2+spd*.45)*(1+(1-f)*.5),W=q.s*(q.jet?.9:.55)*(1+(1-f)*1.2);q.sp.scale.set(L,W,1);
         q.sp.material.opacity=(q.jet?.35:.75)*Math.min(1,f*2.2)*Math.min(1,(q.max-q.life)*10);}
-      else{const sc=q.s*(1+(1-f)*(q.mist?2.4:1.4));q.sp.scale.set(sc,sc,1);q.sp.material.opacity=(q.mist?.3:.7)*Math.min(1,f*2.5)*Math.min(1,(q.max-q.life)*8);}
+      else{const sc=q.s*(1+(1-f)*(q.mist?2.4:1.4));q.sp.scale.set(sc,sc,1);q.sp.material.opacity=(q.mist?.22:.6)*Math.min(1,f*2.5)*Math.min(1,(q.max-q.life)*8);}
       continue;}
     if(q.exh){q.vx+=(wvx-q.vx)*.9*dt;q.vz+=(wvz-q.vz)*.9*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.z+=q.vz*dt;const f=q.life/q.max,sc=q.s*(1+(1-f)*(q.faint?2:1.8));
       q.sp.position.set(q.x,q.y,q.z);q.sp.scale.set(sc,sc,1);q.sp.material.opacity=(q.faint?.07:q.dk?.3:.22)*f*Math.min(1,(q.max-q.life)*4);continue;}
@@ -1436,9 +1436,9 @@ function updateBowWave(dt){
     /* a little mist and a few droplets come off the curling lip, more in a breeze or when she buries her bow */
     if(spd>3&&Math.random()<dt*(spd-3)*(.8+S.bowSurge*3)*sc){const i=2+Math.floor(Math.random()*5),o=(i*4+3)*3;
       const q=puff(arr[o],arr[o+1],arr[o+2],false);
-      if(q){const c0=Math.cos(S.psi),s0=Math.sin(S.psi),mist=Math.random()<.55,out=rnd(.6,1.6)*(1+S.bowSurge*.6);
-        q.spray=true;q.mist=mist;q.dr=mist?rnd(1.2,2):.5;q.g=mist?2.5:9.8;q.streak=!mist;if(!mist)q.sp.material.map=streakTex;q.sp.material.color.setHex(0xf1f6f7);
-        q.life=q.max=mist?rnd(1.1,1.9):rnd(.5,.9);q.s=(mist?rnd(.5,1.1):rnd(.18,.4))*sc*(1+S.bowSurge*.4);
+      if(q){const c0=Math.cos(S.psi),s0=Math.sin(S.psi),out=rnd(.6,1.6)*(1+S.bowSurge*.6);
+        q.spray=true;q.mist=true;q.dr=rnd(1.3,2.1);q.g=2.2;q.streak=false;q.sp.material.color.setHex(0xf1f6f7);
+        q.life=q.max=rnd(1,1.7);q.s=rnd(.28,.6)*sc*(1+S.bowSurge*.35);
         q.vx=S.u*c0*.75-s0*sd*out;q.vz=S.u*s0*.75+c0*sd*out;q.vy=rnd(.6,1.8)*(1+S.bowSurge*.6);}}}
   const nv=U.uNight.value;bowWaveMat.color.setRGB(1-.62*nv,1-.6*nv,1-.55*nv);
 }
