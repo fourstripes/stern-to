@@ -954,8 +954,8 @@ const bowWaveMat=new T3.MeshBasicMaterial({map:bowWaveTex,color:0xf2f7f8,transpa
 const bowWave=[-1,1].map(sd=>{const geo=new T3.BufferGeometry(),uv=[],idx=[];
   for(let i=0;i<BW_N;i++)for(let r=0;r<4;r++)uv.push(i/(BW_N-1),r/3);
   for(let i=0;i<BW_N-1;i++)for(let r=0;r<3;r++){const a=i*4+r,b=a+4;idx.push(a,b,b+1,a,b+1,a+1);}
-  geo.setAttribute('position',new T3.Float32BufferAttribute(new Float32Array(BW_N*4*3),3).setUsage(T3.DynamicDrawUsage));geo.setAttribute('uv',new T3.Float32BufferAttribute(uv,2));geo.setIndex(idx);
-  const m=new T3.Mesh(geo,bowWaveMat);m.frustumCulled=false;m.visible=false;m.userData.sd=sd;own.add(m);return m;});
+  geo.setAttribute('position',new T3.Float32BufferAttribute(new Float32Array(BW_N*4*3),3).setUsage(T3.DynamicDrawUsage));geo.setAttribute('uv',new T3.Float32BufferAttribute(uv,2).setUsage(T3.DynamicDrawUsage));geo.setIndex(idx);
+  const m=new T3.Mesh(geo,bowWaveMat);m.frustumCulled=false;m.visible=false;m.userData.sd=sd;scene3.add(m);return m;});
 const lampP=new T3.Mesh(new T3.SphereGeometry(.28,8,6),new T3.MeshBasicMaterial({color:0xff4030}));
 const lampS=new T3.Mesh(new T3.SphereGeometry(.28,8,6),new T3.MeshBasicMaterial({color:0x30ff80}));own.add(lampP,lampS);
 const lampM=new T3.Mesh(new T3.SphereGeometry(.22,8,6),new T3.MeshBasicMaterial({color:0xfff6e0})),lampA=lampM.clone();own.add(lampM,lampA);
@@ -1015,10 +1015,7 @@ const cnt2=q=>{const n=Math.floor(q);return n+(Math.random()<q-n?1:0);};
 function updateSmoke(dt){
   if(dt<=0)return;
   // heavy weather: when the bow drops hard into a sea, a sheet of spray goes up and blows back over the foredeck
-  if(state==='play'&&!hold&&env.sh>.6&&ownDyn.vrz<-.03&&T-(S.sprayT||0)>.7){
-    const c0=Math.cos(S.psi),s0=Math.sin(S.psi),sw=swellTo(),su=sw[0]*c0+sw[1]*s0,sv=-sw[0]*s0+sw[1]*c0,wdB=windTo(),wl=-wdB[0]*s0+wdB[1]*c0;
-    const head=clamp(.3-su,.12,1.3),k=Math.min(1.6,env.sh-.45)*head*(.75+.3*Math.min(2,Math.max(0,S.u)/3))*Math.min(1.4,-ownDyn.vrz*18);
-    if(k>.12){S.sprayT=T;S.sprayQ={t:0,k,bias:clamp(-(sv*.7)-wl*.4,-1,1),dur:rnd(.28,.55),peak:rnd(.55,1.15)};}}
+  /* heavy-weather spray is triggered by how deep the bow digs into a sea (see updateBowWave) */
   if(S.sprayQ&&!hold){const Q=S.sprayQ;Q.t+=dt;
     const c0=Math.cos(S.psi),s0=Math.sin(S.psi),bvx=S.u*c0-S.v*s0,bvz=S.u*s0+S.v*c0,pPort=.5+.42*Q.bias;
     for(let i=0,n=cnt2((8+20*Q.k)*dt/Q.dur);i<n;i++){
@@ -1411,30 +1408,38 @@ function advanceMissionEnvironment(dt){
   const blend=1-Math.exp(-dt*.3);shC.x+=(slip.x-shC.x)*blend;shC.y+=(slip.y-shC.y)*blend;U.uSlip.value.set(shC.x,shC.y,GEO);
 }
 function updateBowWave(dt){
-  const spd=S.u,fl=S.foil||0,sc=clamp(Math.sqrt(SL)*1.1,.45,1.35);
-  let k=clamp((spd-.8)/3,0,1)*(1-fl);
-  if(state!=='play'&&state!=='menu')k=0;
+  /* Built in world space on the real water surface, so the curl rides the waves instead of the hull. Its foam streams
+     aft at exactly the speed the water passes the hull. How deep the bow digs into a sea drives a surge and a burst of
+     spray that then fades. */
+  const spd=S.u,fl=S.foil||0,sc=clamp(Math.sqrt(SL)*1.1,.45,1.35),k=state==='play'||state==='menu'?clamp((spd-.8)/3,0,1)*(1-fl):0;
+  own.updateMatrixWorld();
+  v3a.set(LEN/2-.8*SL,0,0).applyMatrix4(own.matrixWorld);
+  const dive=Math.max(0,waveH(v3a.x,v3a.z)-v3a.y-.08)*(1-fl),rising=dive-(S.bowDive||0);S.bowDive=dive;
+  if(state==="play"&&!hold&&dive>.15*Math.sqrt(SL)&&rising>0&&spd>1.5&&T-(S.sprayT||0)>.45){ /* the bow buries: throw spray in proportion to the depth */
+    const sw=windTo(),wl=-sw[0]*Math.sin(S.psi)+sw[1]*Math.cos(S.psi);S.sprayT=T;
+    S.sprayQ={t:0,k:clamp(dive*1.6/Math.sqrt(SL),.25,1.6)*clamp(spd/5,.5,1.3),bias:clamp(-wl*.5,-1,1),dur:rnd(.25,.45),peak:clamp(dive*1.4,.5,1.3)};}
+  S.bowSurge=Math.max((S.bowSurge||0)-dt*2.4,Math.min(1.6,dive*2.4/Math.sqrt(SL)));
   bowWaveMat.opacity=.9*k;bowWave.forEach(m=>{m.visible=k>.01;});if(k<=.01)return;
-  bowWaveTex.offset.x-=spd*dt/(LEN*.09);
-  const plunge=Math.min(1.6,Math.max(0,-ownDyn.vrz)*14)*Math.min(1,env.sh*1.5+.2),burst=S.sprayQ?Math.min(1.5,S.sprayQ.k)*Math.sin(Math.PI*Math.min(1,S.sprayQ.t/S.sprayQ.dur)):0;
-  S.bowSurge=Math.max((S.bowSurge||0)-dt*2.2,plunge+burst*1.4); /* burying the bow throws the sheets up, and they take a moment to fall back */
-  const h0=Math.min(1.8,.024*spd*spd)*sc*(1+S.bowSurge*1.2),Lw=LEN*(.12+.22*clamp(spd/8,0,1));
-  for(const m of bowWave){const sd=m.userData.sd,pa=m.geometry.attributes.position,arr=pa.array;
+  const texLen=7*sc;bowWaveTex.offset.x-=spd*dt/texLen;
+  const h0=Math.min(1.8,.024*spd*spd)*sc*(1+S.bowSurge*.75),Lw=LEN*(.12+.22*clamp(spd/8,0,1));
+  const c=Math.cos(RP),sn=Math.sin(RP),ox=own.position.x,oz=own.position.z;
+  for(const m of bowWave){const sd=m.userData.sd,pa=m.geometry.attributes.position,arr=pa.array,ua=m.geometry.attributes.uv.array;
     /* the side moving into the water, and the outside of a turn, push up a bigger wave */
     const side=clamp(1+sd*(S.v*.7+S.r*LEN*.25)/Math.max(spd,1),.45,1.6),h=h0*side;
     for(let i=0;i<BW_N;i++){const t=i/(BW_N-1),x=LEN/2-.5*SL-t*Lw;
-      const hp=h*(t<.28?Math.sin(t/.28*Math.PI/2):Math.pow(Math.cos((t-.28)/.72*Math.PI/2),1.3))*(1+.08*Math.sin(T*9+i*1.7));
-      const zb=sd*(HULL_SIDE(x/SL)*SB+.06),spread=sd*t*Lw*.16;
-      const rows=[[x,-.2,zb],[x,.42*hp,zb+sd*.1*hp+spread*.4],[x+.08*hp,hp,zb+sd*.42*hp+spread*.8],[x-.25*hp,.62*hp,zb+sd*hp+spread]];
-      for(let r=0;r<4;r++){const o=(i*4+r)*3;arr[o]=rows[r][0];arr[o+1]=rows[r][1];arr[o+2]=rows[r][2];}}
-    pa.needsUpdate=true;
+      const hp=h*(t<.28?Math.sin(t/.28*Math.PI/2):Math.pow(Math.cos((t-.28)/.72*Math.PI/2),1.3));
+      const zb=sd*(HULL_SIDE(x/SL)*SB+.06),spread=sd*t*Lw*.16,wx=ox+x*c-zb*sn,wz=oz+x*sn+zb*c,wy=waveH(wx,wz);
+      const rows=[[0,0,-.25],[0,sd*.1*hp+spread*.4,.42*hp],[.08*hp,sd*.42*hp+spread*.8,hp],[-.25*hp,sd*hp+spread,.62*hp]];
+      for(let r=0;r<4;r++){const o=(i*4+r)*3,dx=x+rows[r][0],dz=zb+rows[r][1];
+        arr[o]=ox+dx*c-dz*sn;arr[o+1]=wy+rows[r][2];arr[o+2]=oz+dx*sn+dz*c;ua[(i*4+r)*2]=t*Lw/texLen;}}
+    pa.needsUpdate=true;m.geometry.attributes.uv.needsUpdate=true;
     /* a little mist and a few droplets come off the curling lip, more in a breeze or when she buries her bow */
-    if(spd>3&&Math.random()<dt*(spd-3)*(.9+S.bowSurge*3)*sc){const i=2+Math.floor(Math.random()*5),o=(i*4+3)*3;
-      v3a.set(arr[o],arr[o+1],arr[o+2]).applyMatrix4(own.matrixWorld);const q=puff(v3a.x,v3a.y,v3a.z,false);
-      if(q){const c0=Math.cos(S.psi),s0=Math.sin(S.psi),mist=Math.random()<.55,out=rnd(.6,1.6)*(1+S.bowSurge);
+    if(spd>3&&Math.random()<dt*(spd-3)*(.8+S.bowSurge*3)*sc){const i=2+Math.floor(Math.random()*5),o=(i*4+3)*3;
+      const q=puff(arr[o],arr[o+1],arr[o+2],false);
+      if(q){const c0=Math.cos(S.psi),s0=Math.sin(S.psi),mist=Math.random()<.55,out=rnd(.6,1.6)*(1+S.bowSurge*.6);
         q.spray=true;q.mist=mist;q.dr=mist?rnd(1.2,2):.5;q.g=mist?2.5:9.8;q.streak=!mist;if(!mist)q.sp.material.map=streakTex;q.sp.material.color.setHex(0xf1f6f7);
-        q.life=q.max=mist?rnd(1.1,1.9):rnd(.5,.9);q.s=(mist?rnd(.5,1.1):rnd(.18,.4))*sc*(1+S.bowSurge*.5);
-        q.vx=S.u*c0*.75-s0*sd*out;q.vz=S.u*s0*.75+c0*sd*out;q.vy=rnd(.6,1.8)*(1+S.bowSurge);}}}
+        q.life=q.max=mist?rnd(1.1,1.9):rnd(.5,.9);q.s=(mist?rnd(.5,1.1):rnd(.18,.4))*sc*(1+S.bowSurge*.4);
+        q.vx=S.u*c0*.75-s0*sd*out;q.vz=S.u*s0*.75+c0*sd*out;q.vy=rnd(.6,1.8)*(1+S.bowSurge*.6);}}}
   const nv=U.uNight.value;bowWaveMat.color.setRGB(1-.62*nv,1-.6*nv,1-.55*nv);
 }
 function sync3D(dt){
