@@ -941,6 +941,21 @@ function makeTender(){
 }
 const own=new T3.Group();own.rotation.order='YZX';scene3.add(own);
 const crew=[makeFigure('#f6f8f9'),makeFigure('#f6f8f9'),makeFigure('#f6f8f9')];crew.forEach(f=>own.add(f));
+/* Bow wave: two curling white sheets ("the moustache") peeling off each side of the stem, as in photos of yachts and
+   patrol boats at speed. Each is a 14 x 4 ribbon in the hull's own frame, rebuilt every frame from speed, sway, yaw and
+   the bow's pitch; the foam texture streams aft. Cheap: about a hundred vertices per side, no extra lights or passes. */
+const BW_N=14,bowWaveTex=new T3.CanvasTexture((()=>{const w=256,h=128,c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');
+  g.fillStyle='rgba(255,255,255,.5)';g.fillRect(0,0,w,h); /* aerated white water, then brighter clots and streaks on top */
+  for(let i=0;i<340;i++){const x=Math.random()*w,y=Math.random()*h,r=3+Math.random()*12,a=.3+Math.random()*.6;const rg=g.createRadialGradient(x,y,0,x,y,r);rg.addColorStop(0,`rgba(255,255,255,${a})`);rg.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=rg;g.fillRect(x-r,y-r,r*2,r*2);}
+  g.strokeStyle='rgba(255,255,255,.35)';for(let i=0;i<40;i++){const y=Math.random()*h;g.lineWidth=.6+Math.random()*1.4;g.beginPath();g.moveTo(Math.random()*w*.3,y);g.lineTo(w*.3+Math.random()*w*.7,y+(Math.random()-.5)*6);g.stroke();}
+  g.globalCompositeOperation='destination-in';const vg=g.createLinearGradient(0,0,0,h);vg.addColorStop(0,'rgba(0,0,0,.5)');vg.addColorStop(.28,'rgba(0,0,0,1)');vg.addColorStop(.62,'rgba(0,0,0,.55)');vg.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=vg;g.fillRect(0,0,w,h);return c;})());
+bowWaveTex.wrapS=1000; /* RepeatWrapping (the slim vendored bundle omits the named constant) */bowWaveTex.colorSpace=T3.SRGBColorSpace;
+const bowWaveMat=new T3.MeshBasicMaterial({map:bowWaveTex,color:0xf2f7f8,transparent:true,opacity:0,depthWrite:false,side:T3.DoubleSide});
+const bowWave=[-1,1].map(sd=>{const geo=new T3.BufferGeometry(),uv=[],idx=[];
+  for(let i=0;i<BW_N;i++)for(let r=0;r<4;r++)uv.push(i/(BW_N-1),r/3);
+  for(let i=0;i<BW_N-1;i++)for(let r=0;r<3;r++){const a=i*4+r,b=a+4;idx.push(a,b,b+1,a,b+1,a+1);}
+  geo.setAttribute('position',new T3.Float32BufferAttribute(new Float32Array(BW_N*4*3),3).setUsage(T3.DynamicDrawUsage));geo.setAttribute('uv',new T3.Float32BufferAttribute(uv,2));geo.setIndex(idx);
+  const m=new T3.Mesh(geo,bowWaveMat);m.frustumCulled=false;m.visible=false;m.userData.sd=sd;own.add(m);return m;});
 const lampP=new T3.Mesh(new T3.SphereGeometry(.28,8,6),new T3.MeshBasicMaterial({color:0xff4030}));
 const lampS=new T3.Mesh(new T3.SphereGeometry(.28,8,6),new T3.MeshBasicMaterial({color:0x30ff80}));own.add(lampP,lampS);
 const lampM=new T3.Mesh(new T3.SphereGeometry(.22,8,6),new T3.MeshBasicMaterial({color:0xfff6e0})),lampA=lampM.clone();own.add(lampM,lampA);
@@ -1395,6 +1410,33 @@ function advanceMissionEnvironment(dt){
   if(S.nightOn&&S.night>=1)S.calmT=(S.calmT||0)+dt;
   const blend=1-Math.exp(-dt*.3);shC.x+=(slip.x-shC.x)*blend;shC.y+=(slip.y-shC.y)*blend;U.uSlip.value.set(shC.x,shC.y,GEO);
 }
+function updateBowWave(dt){
+  const spd=S.u,fl=S.foil||0,sc=clamp(Math.sqrt(SL)*1.1,.45,1.35);
+  let k=clamp((spd-.8)/3,0,1)*(1-fl);
+  if(state!=='play'&&state!=='menu')k=0;
+  bowWaveMat.opacity=.9*k;bowWave.forEach(m=>{m.visible=k>.01;});if(k<=.01)return;
+  bowWaveTex.offset.x-=spd*dt/(LEN*.09);
+  const plunge=Math.min(1.6,Math.max(0,-ownDyn.vrz)*14)*Math.min(1,env.sh*1.5+.2),burst=S.sprayQ?Math.min(1.5,S.sprayQ.k)*Math.sin(Math.PI*Math.min(1,S.sprayQ.t/S.sprayQ.dur)):0;
+  S.bowSurge=Math.max((S.bowSurge||0)-dt*2.2,plunge+burst*1.4); /* burying the bow throws the sheets up, and they take a moment to fall back */
+  const h0=Math.min(1.8,.024*spd*spd)*sc*(1+S.bowSurge*1.2),Lw=LEN*(.12+.22*clamp(spd/8,0,1));
+  for(const m of bowWave){const sd=m.userData.sd,pa=m.geometry.attributes.position,arr=pa.array;
+    /* the side moving into the water, and the outside of a turn, push up a bigger wave */
+    const side=clamp(1+sd*(S.v*.7+S.r*LEN*.25)/Math.max(spd,1),.45,1.6),h=h0*side;
+    for(let i=0;i<BW_N;i++){const t=i/(BW_N-1),x=LEN/2-.5*SL-t*Lw;
+      const hp=h*(t<.28?Math.sin(t/.28*Math.PI/2):Math.pow(Math.cos((t-.28)/.72*Math.PI/2),1.3))*(1+.08*Math.sin(T*9+i*1.7));
+      const zb=sd*(HULL_SIDE(x/SL)*SB+.06),spread=sd*t*Lw*.16;
+      const rows=[[x,-.2,zb],[x,.42*hp,zb+sd*.1*hp+spread*.4],[x+.08*hp,hp,zb+sd*.42*hp+spread*.8],[x-.25*hp,.62*hp,zb+sd*hp+spread]];
+      for(let r=0;r<4;r++){const o=(i*4+r)*3;arr[o]=rows[r][0];arr[o+1]=rows[r][1];arr[o+2]=rows[r][2];}}
+    pa.needsUpdate=true;
+    /* a little mist and a few droplets come off the curling lip, more in a breeze or when she buries her bow */
+    if(spd>3&&Math.random()<dt*(spd-3)*(.9+S.bowSurge*3)*sc){const i=2+Math.floor(Math.random()*5),o=(i*4+3)*3;
+      v3a.set(arr[o],arr[o+1],arr[o+2]).applyMatrix4(own.matrixWorld);const q=puff(v3a.x,v3a.y,v3a.z,false);
+      if(q){const c0=Math.cos(S.psi),s0=Math.sin(S.psi),mist=Math.random()<.55,out=rnd(.6,1.6)*(1+S.bowSurge);
+        q.spray=true;q.mist=mist;q.dr=mist?rnd(1.2,2):.5;q.g=mist?2.5:9.8;q.streak=!mist;if(!mist)q.sp.material.map=streakTex;q.sp.material.color.setHex(0xf1f6f7);
+        q.life=q.max=mist?rnd(1.1,1.9):rnd(.5,.9);q.s=(mist?rnd(.5,1.1):rnd(.18,.4))*sc*(1+S.bowSurge*.5);
+        q.vx=S.u*c0*.75-s0*sd*out;q.vz=S.u*s0*.75+c0*sd*out;q.vy=rnd(.6,1.8)*(1+S.bowSurge);}}}
+  const nv=U.uNight.value;bowWaveMat.color.setRGB(1-.62*nv,1-.6*nv,1-.55*nv);
+}
 function sync3D(dt){
   if(pirate){pirate.arm.rotation.z=-.4+Math.sin(T*6)*.9;pirate.arm.rotation.x=Math.sin(T*3)*.3;pirate.g.position.y=1.9+Math.abs(Math.sin(T*3))*.25;}
   // The camera and lights follow the fixed-step mission state.
@@ -1420,6 +1462,7 @@ function sync3D(dt){
   const trim=clamp(ownDyn.acc*.03,-.04,.04)+(shipId==='tender'?.09*ss(.2,.5,fr)*(1-.55*ss(.55,1,fr))*(1-fl)+.38*fl*(1-fl)+.02*fl:.012*ss(.12,.4,fr));
   if(!isFinite(ownDyn.y+ownDyn.rx+ownDyn.rz+ownDyn.acc))Object.assign(ownDyn,newDyn());
   pose(own,ownDyn,RX,RY,RP,LEN,BEAM,S.roll*.6+heel-(S.listV||0),trim,dt,1-.75*fl);stepDampedSpring(S,'foilH','foilVH',(S.rideH||0)-Math.abs(heel)*1.1*fl,6.5,.38,dt);own.position.y+=S.foilH; /* she leaps up with a bounce, flies high and sinks on the inside of a hard turn */
+  updateBowWave(dt);
   if(ownModel&&ownModel.userData.radar)ownModel.userData.radar.rotation.y+=dt*2.6;
   for(const o of obstacles)if(o.kind==='boat'&&o.mesh.userData.radar)o.mesh.userData.radar.rotation.y+=dt*2.2;
   for(const q of buoys)if(q.m){const water=waveSampleAt(q.x,q.y);q.m.position.y=water.height-.2;q.m.rotation.x=clamp(-Math.atan(water.slopeZ),-.25,.25);q.m.rotation.z=clamp(Math.atan(water.slopeX),-.25,.25);}
