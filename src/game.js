@@ -964,7 +964,7 @@ function buildOwn(){
   const tender=shipId==='tender',hs=SL;
   if(tender)ownModel=makeTender();else{ownModel=shipId==='ls'?makeLS():makeYacht(OWN);ownModel.scale.set(SL,hs,SB);const gl=M('#0c1821',.12,'#1c2633');ownModel.children.forEach(m=>{if(m.material===gl)m.material=ownGlass;});}
   own.add(ownModel);deckY=tender?1.14:3.38*hs;
-  crew.forEach(f=>f.scale.setScalar(.7));
+  crew.forEach(f=>{f.scale.setScalar(.7);f.visible=!tender;});
   crew[1].position.set(-22.5*SL,deckY,-2.8*SB);crew[2].position.set(-22.5*SL,deckY,2.8*SB);
   if(tender){lampP.position.set(.4,2.02,-1.2);lampS.position.set(.4,2.02,1.2);}else{lampP.position.set(13*SL,6.3*hs,-3.9*SB);lampS.position.set(13*SL,6.3*hs,3.9*SB);}
   anchorM.scale.setScalar(tender?.32:.62);anchorM2.scale.setScalar(.62);anchorM2.visible=!tender;
@@ -1248,7 +1248,7 @@ function resetVisuals(){
   crew[0].position.set(S.bowX*SL,deckY+sheerAt(S.bowX*SL),S.bowY*SB);
   crew[1].position.set(-22.5*SL,deckY+sheerAt(-22.5*SL),-2.8*SB);
   crew[2].position.set(-22.5*SL,deckY+sheerAt(-22.5*SL),2.8*SB);
-  crew.forEach(person=>{person.visible=true;});own.updateMatrixWorld(true);
+  crew.forEach(person=>{person.visible=shipId!=='tender';});own.updateMatrixWorld(true);
   for(const obstacle of obstacles)if(obstacle.kind==='boat')obstacle.dyn=newDyn();
   for(const puff of puffs){puff.life=0;puff.sp.visible=false;}
   for(const wake of U.uWake.value)wake.set(0,0,0,0);
@@ -1680,6 +1680,7 @@ function advanceDeckWork(dt){
     {const x=man.position.x,sideZ=goIn?1.3*SB:x>-16*SL?Math.max(2.8*SB,hullHW(x)-.75*SB):2.8*SB,zt=(sdI?1:-1)*sideZ;man.position.z+=clamp(zt-man.position.z,-2.2*dt,2.2*dt);
      man.visible=!(goIn&&Math.abs(man.position.x-tx)<.3&&Math.abs(man.position.z-zt)<.3);}
   }
+  if(shipId==='tender')for(const c of crew)c.visible=false; /* the foiler carries no visible crew; its gear still works on the same timing */
 }
 function drawFrame(now){
   const raw=Math.max(0,(now-last)/1000),rdt=Math.min(MAX_FRAME_TIME,raw),active=state==='play'&&!hold;
