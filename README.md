@@ -61,7 +61,7 @@ The Anchors panel works like a real foredeck with three one-tap buttons. Tap the
 
 ## Mission navigation and the final anchorage
 
-The amber arrow guides the boat around land to the next berth; only the final anchorage is marked on the water. Red and green lateral marks follow IALA region A: red to port and green to starboard on entry. East-cardinal cones point away from each other; safe passage is to their east. The game's harbour zones use a 6 kn advisory. Traffic predicts close approaches, slows or alters course when needed, and checks nearby hulls and quays before moving.
+Harbour detail: quays have a pale stone coping, a dark weed line and timber fenders, and foam laps against the walls with the waves. The town's buildings have windows that light up warm at night, and moored yachts carry rails, portholes, fenders and bow and stern lines to the bollards. Each yacht is drawn with one mesh per material and the sea skips its wake-ring loop where no rings can reach, keeping frame rates steady. The amber arrow guides the boat around land to the next berth; only the final anchorage is marked on the water. Red and green lateral marks follow IALA region A: red to port and green to starboard on entry. East-cardinal cones point away from each other; safe passage is to their east. The game's harbour zones use a 6 kn advisory. Traffic predicts close approaches, slows or alters course when needed, and checks nearby hulls and quays before moving.
 
 Shore service requires two actual fast shore lines. At the final anchorage, open Anchors to see the chain paid out, target and progress together:
 

@@ -695,12 +695,16 @@ function waveSampleAt(x,z){
   return sampleWater(WV,waterSettings,x,z,T,waterProbe);
 }
 const waveH=(x,z)=>waveSampleAt(x,z).height;
-const U={uT:{value:0},uSun:{value:SUN},uFog:{value:FOG},uW:{value:uW},uOm:{value:uOm},uChop:{value:WV.chop},uWind:{value:new T3.Vector2(1,0)},uDet:{value:1},uCtr:{value:new T3.Vector2()},uFogK:{value:.0007},uLow:{value:waterCoarse?1:0},uRippleCount:{value:waterTier.rippleOctaves},uWakeStride:{value:waterTier.wakeStride},uFoamDetail:{value:waterTier.foamDetail},uSlop:{value:0},uNight:{value:0},uUW:{value:0},uKing:{value:new T3.Vector4(1,0,-9999,0)},uWake:{value:[]},uSlip:{value:new T3.Vector3(0,0,1)},uShip:{value:new T3.Vector4(0,0,1,0)},uHull:{value:new T3.Vector4(25,4.7,0,0)},uProp:{value:new T3.Vector2()},tFoam:{value:null},uFoamC:{value:new T3.Vector3(0,0,240)}};
+const U={uT:{value:0},uSun:{value:SUN},uFog:{value:FOG},uW:{value:uW},uOm:{value:uOm},uChop:{value:WV.chop},uWind:{value:new T3.Vector2(1,0)},uDet:{value:1},uCtr:{value:new T3.Vector2()},uFogK:{value:.0007},uLow:{value:waterCoarse?1:0},uRippleCount:{value:waterTier.rippleOctaves},uWakeStride:{value:waterTier.wakeStride},uFoamDetail:{value:waterTier.foamDetail},uSlop:{value:0},uNight:{value:0},uUW:{value:0},uKing:{value:new T3.Vector4(1,0,-9999,0)},uWake:{value:[]},uWakeB:{value:new T3.Vector3(0,0,-1)},uSlip:{value:new T3.Vector3(0,0,1)},uShip:{value:new T3.Vector4(0,0,1,0)},uHull:{value:new T3.Vector4(25,4.7,0,0)},uProp:{value:new T3.Vector2()},tFoam:{value:null},uFoamC:{value:new T3.Vector3(0,0,240)}};
 // shelter: full sea outside, about a fifth of it by the berth
 const shC={x:0,y:0};
 const shelter=(x,z)=>{const t=clamp((Math.hypot(x-shC.x,z-shC.y)-45*GEO)/(165*GEO),0,1);return .22+.78*t*t*(3-2*t);};
 for(let i=0;i<32;i++)U.uWake.value.push(new T3.Vector4(0,0,0,0));
 let wkI=0,wkX=0,wkY=0,wkT=0;
+/* a bounding circle round every live wake ring lets the sea shader skip the ring loop elsewhere */
+function updateWakeBounds(){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const w of U.uWake.value){if(w.w<=0)continue;const age=T-w.z;if(age<0||age>48)continue;const r=1.15*age+6;x0=Math.min(x0,w.x-r);y0=Math.min(y0,w.y-r);x1=Math.max(x1,w.x+r);y1=Math.max(y1,w.y+r);}
+  if(x0>x1)U.uWakeB.value.set(0,0,-1);else U.uWakeB.value.set((x0+x1)/2,(y0+y1)/2,Math.hypot(x1-x0,y1-y0)/2);}
 const wakeDrop=(x,y,amp)=>{U.uWake.value[wkI].set(x,y,T,amp);wkI=(wkI+1)%32;};
 const SKY_GLSL=`
 uniform float uT,uNight;uniform vec3 uSun,uFog;
@@ -770,7 +774,7 @@ const sea=new T3.Mesh(seaGeometry(waterTier.segments),new T3.ShaderMaterial({uni
     vec3 o,tx,tz;waterSurface(p,o,tx,tz);o.y+=hullH(o.xz);
     vP=o;vQ=p;gl_Position=projectionMatrix*viewMatrix*vec4(o,1.);
   }`,
-  fragmentShader:SKY_GLSL+WATER_GLSL+HULL_GLSL+`uniform vec2 uWind;uniform float uDet,uFogK,uLow,uSlop,uUW,uRippleCount,uWakeStride,uFoamDetail;uniform vec4 uWake[32];uniform sampler2D tFoam;uniform vec3 uFoamC;varying vec3 vP;varying vec2 vQ;
+  fragmentShader:SKY_GLSL+WATER_GLSL+HULL_GLSL+`uniform vec2 uWind;uniform float uDet,uFogK,uLow,uSlop,uUW,uRippleCount,uWakeStride,uFoamDetail;uniform vec4 uWake[32];uniform vec3 uWakeB;uniform sampler2D tFoam;uniform vec3 uFoamC;varying vec3 vP;varying vec2 vQ;
   vec2 rot(vec2 v,float a){float c=cos(a),s=sin(a);return vec2(c*v.x-s*v.y,s*v.x+c*v.y);}
   void main(){
     vec2 p=vP.xz;float dist=length(cameraPosition-vP);
@@ -804,7 +808,7 @@ const sea=new T3.Mesh(seaGeometry(waterTier.segments),new T3.ShaderMaterial({uni
       g+=amp*am*(.45+.55*sh)*k*dx*d*smoothstep(2.,6.,lam/foot);pos-=d*dx*lam*.08;lam*=.7;amp*=.74;}}
     // rings spreading from where the hull has been: they overlap into a wake
     float wf=smoothstep(2.,6.,2.6/foot);
-    if(wf>0.&&length(p-uShip.xy)<460.)for(int i=0;i<32;i++){if(uWakeStride>1.&&mod(float(i),uWakeStride)>.5)continue;vec4 w=uWake[i];if(w.w<=0.)continue;
+    if(wf>0.&&length(p-uShip.xy)<460.&&length(p-uWakeB.xy)<uWakeB.z)for(int i=0;i<32;i++){if(uWakeStride>1.&&mod(float(i),uWakeStride)>.5)continue;vec4 w=uWake[i];if(w.w<=0.)continue;
       float age=uT-w.z;if(age>48.)continue;vec2 dv=p-w.xy;float r=length(dv)+.001,x=r-1.15*age;if(abs(x)>5.)continue;
       float a=w.w*.09*exp(-age*.075)/(1.+r*.06)*exp(-x*x*.2)*wf;
       g+=dv/r*a*(-.4*x*cos(2.42*x)-2.42*sin(2.42*x));}
@@ -898,7 +902,26 @@ const HULL_SIDE=(()=>{const pts=hullShape(1,1).getPoints(120).filter(p=>p.y>=0);
 YG.forEach(([g,key],i)=>{if(i>2&&key!=='pool')return;const pa=g.attributes.position;
   for(let k=0;k<pa.count;k++){const x=pa.getX(k),y=pa.getY(k);if(y>0)pa.setY(k,y+SHEER(x)*Math.min(1,y/3.2));}
   pa.needsUpdate=true;g.computeVertexNormals();});
-const sharedGeometries=new Set([...YG.map(([geometry])=>geometry),RADAR_G]);
+/* Speed: draw each yacht with one mesh per material instead of one per part. The anchor pockets stay separate. */
+function mergeGeometries(list){
+  const parts=list.map(g=>g.index?g.toNonIndexed():g);let n=0;for(const g of parts)n+=g.attributes.position.count;
+  const pos=new Float32Array(n*3),nor=new Float32Array(n*3);let o=0;
+  for(const g of parts){pos.set(g.attributes.position.array,o*3);if(!g.attributes.normal)g.computeVertexNormals();nor.set(g.attributes.normal.array,o*3);o+=g.attributes.position.count;}
+  const m=new T3.BufferGeometry();m.setAttribute('position',new T3.Float32BufferAttribute(pos,3));m.setAttribute('normal',new T3.Float32BufferAttribute(nor,3));m.computeBoundingSphere();return m;
+}
+const YG_DRAW=(()=>{const byKey=new Map(),out=[];
+  for(const [g,key] of YG){if(anchorPocketGeometries.includes(g)){out.push([g,key]);continue;}if(!byKey.has(key))byKey.set(key,[]);byKey.get(key).push(g);}
+  for(const [key,list] of byKey)out.push([list.length>1?mergeGeometries(list):list[0],key]);return out;})();
+/* stainless guard rail round the main deck: rail and stanchions as one set of thin lines */
+const RAIL_G=(()=>{const pts=hullShape(.93,.83).getPoints(60),seg=[],h=1;
+  for(let i=0;i<pts.length;i++){const a=pts[i],b=pts[(i+1)%pts.length];if(a.x>21.5&&b.x>21.5)continue;
+    seg.push(a.x,3.38+SHEER(a.x)+h,a.y,b.x,3.38+SHEER(b.x)+h,b.y);if(i%3===0)seg.push(a.x,3.38+SHEER(a.x),a.y,a.x,3.38+SHEER(a.x)+h,a.y);}
+  const g=new T3.BufferGeometry();g.setAttribute('position',new T3.Float32BufferAttribute(seg,3));return g;})();
+const railMat=new T3.LineBasicMaterial({color:0xc4ced4,transparent:true,opacity:.75});sharedMaterials.add(railMat);
+/* moored neighbours get a little more life: a row of portholes and three fenders down the quay side */
+const PORT_G=mergeGeometries((()=>{const l=[];for(let x=-12;x<=12.1;x+=2.4)for(const sd of [-1,1])l.push(new T3.CylinderGeometry(.5,.5,.06,10).rotateX(Math.PI/2).scale(.34,.26,1).translate(x,1.75,sd*(HULL_SIDE(x)+.015)));return l;})());
+const FENDER_G=[-1,1].map(sd=>mergeGeometries([-14,-4,6,15].map(x=>new T3.CylinderGeometry(.24,.24,1.05,10).translate(x,.75,sd*(HULL_SIDE(x)+.26)))));
+const sharedGeometries=new Set([...YG.map(([geometry])=>geometry),...YG_DRAW.map(([geometry])=>geometry),RADAR_G,RAIL_G,PORT_G,...FENDER_G]);
 // The fleet reuses yacht geometry and cached materials; only dispose resources owned by this group.
 function disposeTransientGroup(group){
   const geometries=new Set(),materials=new Set();
@@ -924,9 +947,10 @@ function makeLS(){
   const mast=new T3.Mesh(new T3.BoxGeometry(1.1,3.4,.7).translate(-1.6,12.3,0),dk);mast.rotation.z=.12;
   g.add(mast);return g;
 }
-function makeYacht(k){
+function makeYacht(k,moored){
   const g=new T3.Group(),mats={hull:Object.assign(M(k.hull,.45),{side:T3.DoubleSide}),trim:Object.assign(M(k.trim,.5),{side:T3.DoubleSide}),deck:Object.assign(M(k.deck,.85),{side:T3.DoubleSide}),s1:M(k.s1,.5),s2:M(k.s2,.45),s3:M(k.s3,.5),pocket:M('#141a20',.5),glass:Object.assign(M('#0c1821',.12,'#1c2633'),{side:T3.DoubleSide}),pool:M('#3fb6cf',.2,'#0b3a44')};
-  for(const [geo,key] of YG)g.add(new T3.Mesh(geo,mats[key]));
+  for(const [geo,key] of YG_DRAW)g.add(new T3.Mesh(geo,mats[key]));
+  if(moored){g.add(new T3.LineSegments(RAIL_G,railMat));g.add(new T3.Mesh(PORT_G,mats.pocket));}
   const rd=new T3.Mesh(RADAR_G,mats.s2);rd.position.set(2.6,11.27,0);rd.rotation.y=Math.random()*6;g.add(rd);g.userData.radar=rd;
   return g;
 }
@@ -1211,14 +1235,78 @@ function advanceFoam(){
 // berth marker
 const slipG=new T3.Group(),slipFill=new T3.MeshBasicMaterial({color:0xffb547,transparent:true,opacity:.14,depthWrite:false,fog:false}),slipLine=new T3.LineBasicMaterial({color:0xffb547,fog:false});
 scene3.add(slipG);
-let lvG=null,pirate=null;
+let lvG=null,pirate=null,mooringLines=null;
+/* Quay detail along every water-facing edge near the harbour: a pale stone coping, a dark weed line at the waterline,
+   timber fenders down the face (one instanced draw), and a ribbon of foam that laps against the wall with the waves. */
+const lapMat=new T3.ShaderMaterial({uniforms:U,transparent:true,depthWrite:false,fog:false,side:T3.DoubleSide,
+  vertexShader:`uniform float uT;`+WATER_GLSL+`attribute float aAlong;varying vec2 vL;varying float vH;
+  void main(){vec3 o,tx,tz;waterSurface(position.xz,o,tx,tz);vH=o.y;vL=vec2(aAlong,uv.y);gl_Position=projectionMatrix*viewMatrix*vec4(position.x,o.y+.04,position.z,1.);}`,
+  fragmentShader:`uniform float uT,uNight;varying vec2 vL;varying float vH;
+  float h1(float x){return fract(sin(x*127.1)*43758.5);}
+  float n1(float x){float i=floor(x),f=fract(x);return mix(h1(i),h1(i+1.),f*f*(3.-2.*f));}
+  void main(){float across=vL.y,pulse=.55+.45*sin(uT*1.6+vL.x*.21+vH*4.),br=n1(vL.x*.9+uT*.6)*n1(vL.x*2.3-uT*.4+across*3.);
+    float a=pow(1.-across,2.2)*(.25+.55*pulse)*(.45+.75*br);gl_FragColor=vec4(vec3(.86,.92,.94)*(1.-.62*uNight),min(.9,a*1.25));}`});
+/* buildings: a grid of windows on every wall, and at night a scatter of them glow warm */
+const buildingMat=new T3.MeshStandardMaterial({roughness:.9});sharedMaterials.add(buildingMat);
+buildingMat.onBeforeCompile=sh=>{sh.uniforms.uNight=U.uNight;
+  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP,vWN;').replace('#include <project_vertex>',`#include <project_vertex>
+    vec4 bw=vec4(transformed,1.);vec3 bn=objectNormal;
+    #ifdef USE_INSTANCING
+    bw=instanceMatrix*bw;bn=mat3(instanceMatrix)*bn;
+    #endif
+    vWP=(modelMatrix*bw).xyz;vWN=normalize(mat3(modelMatrix)*bn);`);
+  sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vWP,vWN;uniform float uNight;float winMask;vec2 winCell;').replace('#include <color_fragment>',`#include <color_fragment>
+    {float vert=step(abs(vWN.y),.5);vec2 w=vec2(dot(vWP.xz,vec2(-vWN.z,vWN.x)),vWP.y-1.6);vec2 f=fract(w/vec2(2.6,3.2));winCell=floor(w/vec2(2.6,3.2));
+     winMask=vert*step(.24,f.x)*step(f.x,.76)*step(.34,f.y)*step(f.y,.78)*step(.5,winCell.y);
+     diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.07,.09,.11),winMask*.85);
+     diffuseColor.rgb*=mix(1.,.82,vert*step(fract(w.y/3.2),.05));}`).replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+    totalEmissiveRadiance+=vec3(1.,.6,.28)*winMask*step(.62,fract(sin(dot(winCell+floor(vWP.xz*.013),vec2(12.9898,78.233)))*43758.5))*uNight*.42;`);};
+function buildQuayDetail(rand){
+  const box=[],ribbon=[],along=[],uvs=[],idx=[],near=(x,y,r)=>allSlips.some(q=>Math.hypot(x-q.x,y-q.y)<r);
+  for(const o of obstacles){if(o.kind!=='land'&&o.kind!=='pier')continue;const P=o.p,top=o.kind==='land'?1.6:1.2;
+    for(let i=0;i<P.length;i++){const a=P[i],b=P[(i+1)%P.length],ex=b[0]-a[0],ey=b[1]-a[1],L=Math.hypot(ex,ey);if(L<4)continue;
+      let nx=-ey/L,ny=ex/L;if((o.cx-(a[0]+b[0])/2)*nx+(o.cy-(a[1]+b[1])/2)*ny>0){nx=-nx;ny=-ny;} /* (nx,ny) points out into the water */
+      const ux=ex/L,uy=ey/L,ang=-Math.atan2(uy,ux);
+      /* walk the edge in pieces, keeping only stretches that face open water near the harbour */
+      let run=null;const flush=()=>{if(!run)return;const [s0,s1]=run,len=s1-s0,mx=a[0]+ux*(s0+s1)/2,my=a[1]+uy*(s0+s1)/2;
+        box.push([mx-nx*.3,top+.07,my-ny*.3,len,.14,.62,ang,.84,.82,.76]);           /* coping */
+        box.push([mx+nx*.04,.12,my+ny*.04,len,.85,.1,ang,.17,.19,.15]);               /* weed line */
+        for(let d=s0+3;d<s1-1;d+=6.5)box.push([a[0]+ux*d+nx*.14,top-.85,a[1]+uy*d+ny*.14,.32,1.5,.26,ang,.16,.13,.1]); /* timber fenders */
+        const base=ribbon.length/3;let k=0;for(let d=s0;d<=s1+.01;d+=3,k++){const t=Math.min(d,s1),x=a[0]+ux*t+nx*.05,y=a[1]+uy*t+ny*.05;
+          ribbon.push(x,0,y,x+nx*2.2,0,y+ny*2.2);along.push(t,t);uvs.push(0,0,0,1);if(k)idx.push(base+2*k-2,base+2*k-1,base+2*k+1,base+2*k-2,base+2*k+1,base+2*k);}
+        run=null;};
+      for(let d=0;d<L;d+=4){const x=a[0]+ux*(d+2)+nx*2,y=a[1]+uy*(d+2)+ny*2;
+        const ok=near(x,y,460)&&!obstacles.some(q=>q!==o&&q.kind!=='boat'&&q.kind!=='isle'&&inside([x,y],q.p));
+        if(ok){if(run)run[1]=Math.min(L,d+4);else run=[d,Math.min(L,d+4)];}else flush();}
+      flush();}}
+  if(box.length){const bm=new T3.InstancedMesh(new T3.BoxGeometry(1,1,1),new T3.MeshStandardMaterial({roughness:.92}),box.length),m=new T3.Matrix4(),r=new T3.Matrix4(),cc=new T3.Color();
+    box.forEach((q,i)=>{m.makeRotationY(q[6]).multiply(r.makeScale(q[3],q[4],q[5]));m.setPosition(q[0],q[1],q[2]);bm.setMatrixAt(i,m);bm.setColorAt(i,cc.setRGB(q[7],q[8],q[9]));});lvG.add(bm);}
+  if(ribbon.length){const g=new T3.BufferGeometry();g.setAttribute('position',new T3.Float32BufferAttribute(ribbon,3));g.setAttribute('aAlong',new T3.Float32BufferAttribute(along,1));g.setAttribute('uv',new T3.Float32BufferAttribute(uvs,2));g.setIndex(idx);
+    const lap=new T3.Mesh(g,lapMat);lap.frustumCulled=false;lap.renderOrder=2;lvG.add(lap);}
+}
+function updateMooringLines(){
+  if(!mooringLines)return;const arr=mooringLines.geometry.attributes.position.array;let o3=0;
+  for(const o of obstacles){if(!o.lines)continue;o.mesh.updateMatrixWorld();
+    for(const [lx,lz,b] of o.lines){v3a.set(lx,3.1+SHEER(lx),lz).applyMatrix4(o.mesh.matrixWorld);const top=(b.top||1.6)+.55;
+      v3c.set((v3a.x+b.x)/2,Math.min(v3a.y,top)-.9,(v3a.z+b.y)/2);
+      arr[o3++]=v3a.x;arr[o3++]=v3a.y;arr[o3++]=v3a.z;arr[o3++]=v3c.x;arr[o3++]=v3c.y;arr[o3++]=v3c.z;
+      arr[o3++]=v3c.x;arr[o3++]=v3c.y;arr[o3++]=v3c.z;arr[o3++]=b.x;arr[o3++]=top;arr[o3++]=b.y;}}
+  mooringLines.geometry.attributes.position.needsUpdate=true;
+}
 function build3D(){
   if(lvG)disposeTransientGroup(lvG);
   lvG=new T3.Group();scene3.add(lvG);
   let seed=7+lvI*13;const rand=()=>(seed=(seed*16807)%2147483647)/2147483647;
   const blocks=[];
   for(const o of obstacles){
-    if(o.kind==='boat'){o.mesh=makeYacht(o.look);o.mesh.scale.set(o.l/50,o.l/50,o.b/9.4);o.mesh.rotation.order='YZX';lvG.add(o.mesh);continue;}
+    if(o.kind==='boat'){const moored=!o.tr;o.mesh=makeYacht(o.look,moored);o.mesh.scale.set(o.l/50,o.l/50,o.b/9.4);o.mesh.rotation.order='YZX';lvG.add(o.mesh);
+      if(moored){const c=Math.cos(o.psi),sn=Math.sin(o.psi),side=sd=>{const off=o.b/2+3,x=o.x-sn*sd*off,y=o.y+c*sd*off;return obstacles.some(q=>q.kind!=='boat'&&q.kind!=='isle'&&inside([x,y],q.p));};
+        const sd=side(1)?1:side(-1)?-1:0;o.quay=sd;
+        if(sd){o.mesh.add(new T3.Mesh(FENDER_G[sd>0?1:0],M('#1b2a36',.6)));
+          /* bow and stern lines to the nearest bollards ahead of the bow and astern of the stern */
+          const pick=(lx)=>{const tx=o.x+c*lx*o.l/50*1.35,ty=o.y+sn*lx*o.l/50*1.35;let best=null,bd=28;for(const q of bollards){const d=Math.hypot(q.x-tx,q.y-ty);if(d<bd){bd=d;best=q;}}return best;};
+          o.lines=[[21,1.9*sd,pick(21)],[-24,3.9*sd,pick(-24)]].filter(l=>l[2]);}}
+      continue;}
     if(o.kind==='isle'){ // sand shelving into the water, a grassy top
       const sg=new T3.CylinderGeometry(o.ir*.86,o.ir*1.12,3.4,32),gg=new T3.CylinderGeometry(o.ir*.55,o.ir*.7,.5,32);
       const sand=new T3.Mesh(sg,M('#d9c79c',.95));sand.position.set(o.ix,-.1,o.iy);
@@ -1252,8 +1340,13 @@ function build3D(){
       lvG.add(pg);});
 
   }
-  if(blocks.length){const bm=new T3.InstancedMesh(new T3.BoxGeometry(1,1,1),new T3.MeshStandardMaterial({roughness:.9}),blocks.length),m=new T3.Matrix4(),cc=new T3.Color();
-    blocks.forEach((b,i)=>{m.makeScale(b[2],b[4],b[3]);m.setPosition(b[0],1.6+b[4]/2,b[1]);bm.setMatrixAt(i,m);const v=.16+b[5]*.22;bm.setColorAt(i,cc.setRGB(v,v*1.02,v*1.05));});lvG.add(bm);}
+  if(blocks.length){const bm=new T3.InstancedMesh(new T3.BoxGeometry(1,1,1),buildingMat,blocks.length),m=new T3.Matrix4(),cc=new T3.Color();
+    const PAL=[[.86,.84,.79],[.9,.87,.8],[.82,.76,.66],[.78,.62,.5],[.88,.86,.83],[.74,.72,.68]];
+    blocks.forEach((b,i)=>{m.makeScale(b[2],b[4],b[3]);m.setPosition(b[0],1.6+b[4]/2,b[1]);bm.setMatrixAt(i,m);const p=PAL[Math.floor(b[5]*PAL.length*7)%PAL.length],v=.42+.18*b[5];bm.setColorAt(i,cc.setRGB(p[0]*v,p[1]*v,p[2]*v));});lvG.add(bm);}
+  buildQuayDetail(rand);
+  {const n=obstacles.reduce((k,o)=>k+(o.lines?o.lines.length:0),0);mooringLines=null;
+   if(n){const g=new T3.BufferGeometry();g.setAttribute('position',new T3.Float32BufferAttribute(new Float32Array(n*2*3*3),3).setUsage(T3.DynamicDrawUsage));
+     mooringLines=new T3.LineSegments(g,new T3.LineBasicMaterial({color:0xd8d0bc}));mooringLines.frustumCulled=false;lvG.add(mooringLines);}}
   if(bollards.length){const bm=new T3.InstancedMesh(new T3.CylinderGeometry(.24,.3,.7,8),M('#22282d',.5),bollards.length),m=new T3.Matrix4();
     bollards.forEach((q,i)=>{q.top=q.h<.5?1.2:1.6;m.makeTranslation(q.x,q.top+.35,q.y);bm.setMatrixAt(i,m);});lvG.add(bm);}
   shC.x=slip.x;shC.y=slip.y;buildSlipMarker();
@@ -1429,6 +1522,18 @@ function advanceMissionEnvironment(dt){
   if(S.nightOn&&S.night>=1)S.calmT=(S.calmT||0)+dt;
   const blend=1-Math.exp(-dt*.3);shC.x+=(slip.x-shC.x)*blend;shC.y+=(slip.y-shC.y)*blend;U.uSlip.value.set(shC.x,shC.y,GEO);
 }
+/* a few gulls wheeling over the harbour by day: one instanced draw, wings flap and glide */
+const GULLS=5,gullGeo=new T3.BufferGeometry();gullGeo.setAttribute('position',new T3.Float32BufferAttribute([0,0,.1, -.15,.02,-.15, 0,0,-.05, 0,0,.1, 0,0,-.05, .15,.02,-.15, -.15,.02,-.15, -.85,.18,-.05, -.05,0,-.02, .15,.02,-.15, .05,0,-.02, .85,.18,-.05],3));gullGeo.computeVertexNormals();
+const gulls=new T3.InstancedMesh(gullGeo,new T3.MeshBasicMaterial({color:0xe9eef0,side:T3.DoubleSide}),GULLS);gulls.frustumCulled=false;scene3.add(gulls);
+const gullState=Array.from({length:GULLS},(_,i)=>({a:i*1.3,r:26+i*9,h:16+i*3.5,w:.12+.05*(i%3),ph:i*2.1})),_gm=new T3.Matrix4(),_gr=new T3.Matrix4(),_gs=new T3.Vector3(),_gp=new T3.Vector3();
+function updateGulls(dt){
+  const show=(S?.night||0)<.35&&env.sh<1.1;gulls.visible=show;if(!show)return;
+  const cx=cam.x,cy=cam.y;
+  gullState.forEach((g,i)=>{g.a+=g.w*dt*(i%2?-1:1);const flap=Math.max(0,Math.sin(T*1.7+g.ph))>.2?Math.sin(T*9+g.ph):0;
+    _gp.set(cx+Math.cos(g.a)*g.r,g.h+Math.sin(T*.4+g.ph)*1.5,cy+Math.sin(g.a)*g.r);
+    _gs.set(1.6,1+.9*flap,1.6);_gm.makeRotationY((i%2?Math.PI:0)-g.a).multiply(_gr.makeRotationZ(Math.sin(T*.7+g.ph)*.25)).scale(_gs).setPosition(_gp);gulls.setMatrixAt(i,_gm);});
+  gulls.instanceMatrix.needsUpdate=true;
+}
 function updateBowWave(dt){
   /* Built in world space on the real water surface, so the curl rides the waves instead of the hull. Its foam streams
      aft at exactly the speed the water passes the hull. How deep the bow digs into a sea drives a surge and a burst of
@@ -1476,7 +1581,7 @@ function sync3D(dt){
   {const q=S.cineT==null?0:clamp((S.cineT-1.2)/2.2,0,1);anchMast.scale.y=Math.max(.001,q);anchMast.visible=q>0;anchLamp.visible=q>=1;}
   {const nv=U.uNight.value;navGlow.forEach(g=>{g.material.opacity=nv*.55;g.visible=nv>.02;});}
   U.uUW.value=S.uw||0;
-  U.uT.value=T;setWaves();U.uKing.value.set(KW.d[0],KW.d[1],KW.pos,KW.on?KW.A:0);U.uSlip.value.set(shC.x,shC.y,GEO);
+  U.uT.value=T;setWaves();updateWakeBounds();U.uKing.value.set(KW.d[0],KW.d[1],KW.pos,KW.on?KW.A:0);U.uSlip.value.set(shC.x,shC.y,GEO);
   // heel in the turn, trim with the throttle, and a lurch when she hits something
   ownDyn.acc+=((S.u-ownDyn.pu)/Math.max(dt,.001)-ownDyn.acc)*(1-Math.exp(-dt*3));ownDyn.pu=S.u;
   if(S.kick){ownDyn.vrx+=(Math.random()<.5?-1:1)*Math.min(.25,S.kick*.12);ownDyn.vrz-=.04*Math.min(2,S.kick);S.kick=0;}
@@ -1491,12 +1596,14 @@ function sync3D(dt){
   pose(own,ownDyn,RX,RY,RP,LEN,BEAM,S.roll*.6+heel-(S.listV||0),trim,dt,1-.75*fl);stepDampedSpring(S,'foilH','foilVH',(S.rideH||0)-Math.abs(heel)*1.1*fl,6.5,.38,dt);own.position.y+=S.foilH; /* she leaps up with a bounce, flies high and sinks on the inside of a hard turn */
   updateBowWave(dt);
   if(ownModel&&ownModel.userData.radar)ownModel.userData.radar.rotation.y+=dt*2.6;
+  updateGulls(dt);
   for(const o of obstacles)if(o.kind==='boat'&&o.mesh.userData.radar)o.mesh.userData.radar.rotation.y+=dt*2.2;
   for(const q of buoys)if(q.m){const water=waveSampleAt(q.x,q.y);q.m.position.y=water.height-.2;q.m.rotation.x=clamp(-Math.atan(water.slopeZ),-.25,.25);q.m.rotation.z=clamp(Math.atan(water.slopeX),-.25,.25);}
   for(const o of obstacles)if(o.kind==='boat'){o.dyn=o.dyn||newDyn();
     // moored boats surge on their lines with each swell, and roll and pitch more freely than a boat under way
     const moving=o.tr&&o.tr.st==='go',w0=WV[0],sg=moving?0:w0.amp*shelter(o.x,o.y)*1.6*Math.sin(w0.k*(w0.dx*o.x+w0.dz*o.y)-w0.om*T-.8);
     pose(o.mesh,o.dyn,o.x+w0.dx*sg,o.y+w0.dz*sg,o.psi,o.l,o.b,0,0,dt,moving?1:2.4);}
+  updateMooringLines();
   U.uShip.value.set(S.x,S.y,Math.cos(S.psi),Math.sin(S.psi));{const fl=S.foil||0;U.uSlop.value=Math.min(.22,Math.abs(ownDyn.vy)*.45+Math.abs(ownDyn.vrx)*1.4)*(1-fl);U.uHull.value.set(LEN/2,BEAM/2,S.u*(1-.8*fl),S.v*(1-.8*fl));U.uProp.value.set((S.rpm[0]+S.rpm[1])/2*(1-.6*fl),S.thrAct);}
   // foam thrown off the bow as it drops into a wave
   if(state==='play'&&(S.foil||0)<.5&&ownDyn.vrz<-.02&&Math.hypot(S.u,S.v)>1&&Math.random()<dt*40){const c0=Math.cos(S.psi),s0=Math.sin(S.psi),sd=Math.random()<.5?-1:1;
