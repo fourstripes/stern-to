@@ -145,6 +145,7 @@ function mooredStart(){
 const hawseFor=sd=>shipId==='tender'?[24.6*SL,0]:[19.4*SL,sd*2.4*SB];
 const anchSides=()=>shipId==='tender'?[0]:S.anchSel===2?[-1,1]:[S.anchSel===0?-1:1];
 const selectedAnchors=()=>S.anchors.filter(a=>anchSides().includes(a.side));
+const SCOPE_OF=()=>Math.ceil(18*Math.max(.7,SL));
 const preferredAnchor=()=>selectedAnchors()[0]||S.anchors[0]; // goal display only; never an operation target
 function setAnchorSelection(value){
   if(!canDrive()||!Number.isInteger(value)||value<0||value>2)return;
@@ -484,16 +485,17 @@ function step(dt){
     const retrieving=A.tapHeave||(manual?manual>0:A.weighing);A.tapHeave=false;
     if(retrieving&&A.L0<=2.05&&d<=2.5){weighed.push(A);continue;}
     if(retrieving&&A.L0<3&&d<3)A.set=false;
-    if(A.paying&&!manual&&!A.weighing){ /* the crew ease the brake: a steady run, faster when she pulls away, never letting it snatch */
+    if(A.paying&&!manual&&!A.weighing){ /* the bosun works the brake: enough to reach the bottom, then only as fast as she moves away */
       A.held=true;const dep=7*Math.sqrt(Math.max(.25,SL)),need=Math.hypot(d,dep)+1;
-      A.L0=Math.min(140,A.L0+dt*clamp(.75*Math.sqrt(Math.max(.5,SL))+Math.max(0,need-A.L0)*1.5,0,2.5*Math.sqrt(Math.max(.25,SL))));
+      A.L0=Math.min(140,A.L0+Math.min(Math.max(0,need-A.L0),dt*2.5*Math.sqrt(Math.max(.25,SL))));
+      if(A.L0>=dep&&!A.bottomSaid&&Math.hypot(u,v)<.3&&A.L0<SCOPE_OF()){A.bottomSaid=true;toast('Anchor on the bottom · back away to lay out chain',2200);}
       if(A.L0>=140){A.paying=false;toast('All the chain is out · locked',1600);}}
     const SCOPE=Math.ceil(18*Math.max(.7,SL)),inAnchorage=!!(stops&&stops[S.stage].anchor&&Math.hypot(A.x-slip.x,A.y-slip.y)<=slip.len/2);
     const readyToSet=!retrieving&&A.held&&!A.paying&&A.L0>=SCOPE;
     if(A.paying&&A.L0>=SCOPE&&!A.scopeSaid){A.scopeSaid=true;toast('Enough chain out · tap the lock to hold it',2200);}
     A.settle=inAnchorage&&readyToSet&&Math.hypot(u,v)<.2&&Math.abs(r)<.6*D2R?(A.settle||0)+dt:0;
     if(!A.set&&readyToSet&&(inAnchorage?A.settle>=.75:d>=Math.min(A.L0-1.2,SCOPE*.8))){A.set=true;toast('Anchor holding · '+Math.floor(A.L0)+' m out',1800);}
-    if(!retrieving&&A.held&&!A.paying&&!A.set&&A.L0<SCOPE&&S.t-(A.warnT||-9)>8){A.warnT=S.t;toast('Pay out more chain · tap the down arrow',2200);}
+    if(!retrieving&&A.held&&!A.paying&&!A.set&&A.L0<SCOPE&&S.t-(A.warnT||-9)>8){A.warnT=S.t;toast('Short on chain · tap the down arrow and back away',2200);}
     {const al=(A.x-S.x)*cs+(A.y-S.y)*sn,la=-(A.x-S.x)*sn+(A.y-S.y)*cs;if(al<ha[0]-3&&al>-LEN/2&&Math.abs(la)<BEAM*.55){S.damage=Math.min(100,S.damage+dt*(.6+Math.hypot(u,v)*2));if(S.t-(A.scrT||-9)>4){A.scrT=S.t;toast('Chain scraping the hull · back away from it',2000);}}}
     if(!A.held){A.run=(A.run||0)+dt;if(A.run>.9&&A.run<4.4)A.L0+=4*(1-(A.run-.9)/3.5)*Math.max(.5,SL)*dt;A.L0=Math.max(A.L0,d+1);} /* free chain rumbles out to the sea bed */
     else{let ext=d-A.L0;if(ext>0){

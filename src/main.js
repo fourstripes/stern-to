@@ -36,7 +36,7 @@ function failed(error) {
 retry.addEventListener('click', () => location.reload());
 
 try {
-  const { startGame } = await import('./game.js?v=20261127-anchorui');
+  const { startGame } = await import('./game.js?v=20261127-bosun');
   startGame({
     onReady: ready,
     onError: failed,
