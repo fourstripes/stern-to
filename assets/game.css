@@ -630,3 +630,8 @@ html #app.mooring-split .dock{max-width:470px}
 #help .keys{gap:5px 18px;font-size:13px}
 #help .keys div{display:grid;grid-template-columns:62px minmax(0,1fr);align-items:center;gap:8px}
 #help .keys .k{display:flex;gap:3px;align-items:center;white-space:nowrap}
+/* anchor buttons keep their icon visible in every state: no solid fill from the generic .btn.on / :active styles */
+#app #gLines .anchor-actions .btn.on,#app #gLines .anchor-actions .btn:active{background:rgba(255,181,71,.14);color:var(--amber);border-color:var(--amber)}
+#app #gLines .anchor-actions #anchDrop.on:disabled{opacity:1;background:rgba(255,181,71,.14);color:var(--amber);border-color:var(--amber)}
+#app #gLines .anchor-actions #anchLock.on{background:rgba(18,64,46,.7);color:var(--stbd);border-color:var(--stbd)}
+#app #gLines #anchorDiagram [data-anchor="2"]:active{background:rgba(255,181,71,.14)}
