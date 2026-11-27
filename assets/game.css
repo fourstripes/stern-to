@@ -586,7 +586,13 @@ html #app,html #app.mooring-wide{--mooring-width:132px;--c:30px}
 #app #gLines .anchor-actions .btn::before{content:"";position:absolute;inset:0;margin:auto;width:18px;height:18px;background:currentColor;-webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
 #anchDrop{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v15M6 12l6 6 6-6M5 21h14'/%3E%3C/svg%3E")}
 #anchWeigh{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21V6M6 12l6-6 6 6M5 3h14'/%3E%3C/svg%3E")}
-#anchWeigh.on{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='6' y='6' width='12' height='12' rx='2' fill='%23000'/%3E%3C/svg%3E");color:var(--amber);border-color:var(--amber)}
+#anchLock{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E")}
+/* Drop pulses amber while the crew pay out; Lock turns green when the chain is held; Up is amber while heaving */
+#app #gLines .anchor-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+#app #gLines #anchDrop.on{color:var(--amber);border-color:var(--amber);animation:gearPulse 1s ease-in-out infinite alternate}
+#app #gLines #anchLock.on{color:var(--stbd);border-color:var(--stbd);background:rgba(18,64,46,.6)}
+#app #gLines #anchWeigh.on{color:var(--amber);border-color:var(--amber)}
+@media (prefers-reduced-motion:reduce){#app #gLines #anchDrop.on{animation:none}}
 #app #gLines .anchor-chain-control{gap:0}
 #app #gLines #chainRow,#app.mooring-wide #gLines #chainRow{grid-template-columns:32px minmax(0,1fr) 32px;grid-template-rows:auto;column-gap:3px;align-items:center}
 @media (pointer:coarse){#app #gLines #chainRow,#app.mooring-wide #gLines #chainRow{grid-template-columns:38px minmax(0,1fr) 38px}}

@@ -25,7 +25,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="modulepreload" href="vendor/three.module.min.js">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="assets/game.css?v=20261126-touches">
+<link rel="stylesheet" href="assets/game.css?v=20261127-anchor">
 </head>
 <body>
 <section id="startup" class="startup" role="status" aria-live="polite" aria-atomic="true">
@@ -89,7 +89,7 @@
             <span class="lt" id="scopeTx" role="status">Stowed</span>
           </div>
           <div class="anchor-controls">
-            <div class="anchor-actions"><button class="btn" id="anchDrop">Drop</button><button class="btn" id="anchWeigh" disabled>Bring in</button></div>
+            <div class="anchor-actions"><button class="btn" id="anchDrop" title="Drop · pay out">Drop</button><button class="btn" id="anchLock" title="Lock the chain" aria-pressed="false" disabled>Lock</button><button class="btn" id="anchWeigh" title="Bring in · tap again to stop" disabled>Bring in</button></div>
             <div class="anchor-chain-control">
               <span class="anchor-chain-label" id="chainLabel">Chain out (m)</span>
               <div class="pair" id="chainRow" role="group" aria-labelledby="chainLabel">
@@ -165,7 +165,7 @@
         <div><span class="k"><kbd>H</kbd><kbd>J</kbd></span><span>heave · slack</span></div>
         <div><span class="k"><kbd>G</kbd></span><span>let lines go</span></div>
         <div><span class="k"><kbd>Z</kbd></span><span>anchor side</span></div>
-        <div><span class="k"><kbd>X</kbd></span><span>drop anchor</span></div>
+        <div><span class="k"><kbd>X</kbd></span><span>drop · lock anchor</span></div>
         <div><span class="k"><kbd>B</kbd></span><span>anchor up</span></div>
         <div><span class="k"><kbd>T</kbd><kbd>V</kbd></span><span>top · chase view</span></div>
         <div><span class="k"><kbd>P</kbd></span><span>pause</span></div>
@@ -200,7 +200,7 @@
   </div>
 </div>
 
-<script type="module" src="src/main.js?v=20261126-touches"></script>
+<script type="module" src="src/main.js?v=20261127-anchor"></script>
 
 
 </body>

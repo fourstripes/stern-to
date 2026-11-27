@@ -16,16 +16,19 @@ function rig(h,sides=[-1,1],lengths=[20,30]) {
 function ticks(h,n) { h.run(`for(let i=0;i<${n};i++)step(1/60);updateMooringUI();`); }
 const lengths=h=>h.read('S.anchors.map(a=>a.L0)');
 
-test('Drop deploys just the chosen sides with 3 m held, including a partial Both request',t=>{
+test('Drop lets go just the chosen sides and the crew pay out until the chain is locked, including a partial Both request',t=>{
   const h=fixture(t);h.click('anchDrop');
   assert.deepEqual(h.read('S.dropSides'),[-1]);assert.equal(h.element('anchDrop').disabled,true);
   h.run('S.bowX=23.2;advanceDeckWork(1/60)');
-  assert.deepEqual(h.read('S.anchors.map(a=>[a.side,a.L0,a.held])'),[[-1,3,true]]);
-  ticks(h,90);assert.deepEqual(lengths(h),[3],'an untouched drop never runs out more chain');
-  select(h,2);h.click('anchDrop');assert.deepEqual(h.read('S.dropSides'),[1]);
+  assert.deepEqual(h.read('S.anchors.map(a=>[a.side,a.L0,a.held,a.paying])'),[[-1,3,true,true]]);
+  ticks(h,90);assert.ok(lengths(h)[0]>3,'the crew pay out chain without a held button');assert.equal(h.element('anchDrop').classList.contains('on'),true);
+  h.click('anchLock');const locked=lengths(h)[0];assert.equal(h.read('S.anchors[0].paying'),false);
+  ticks(h,90);assert.deepEqual(lengths(h),[locked],'a locked chain stays put');assert.equal(h.element('anchLock').classList.contains('on'),true);
+  select(h,2);h.click('anchDrop');assert.deepEqual(h.read('S.dropSides'),[1]);assert.equal(h.read('S.anchors[0].paying'),false,'adding a side leaves the first locked');
   h.run('S.bowX=23.2;advanceDeckWork(1/60)');
-  assert.deepEqual(h.read('S.anchors.map(a=>[a.side,a.L0,a.held])'),[[-1,3,true],[1,3,true]]);
+  assert.deepEqual(h.read('S.anchors.map(a=>[a.side,a.held])'),[[-1,true],[1,true]]);assert.equal(h.read('S.anchors[1].L0'),3);
   h.run('dropAnchors();advanceDeckWork(1/60)');assert.equal(h.read('S.anchors.length'),2);
+  h.click('anchLock');h.click('anchDrop');assert.deepEqual(h.read('S.anchors.map(a=>a.paying)'),[true,true],'Drop again eases the brake on both');
 });
 
 test('pending drops keep requested sides across selection changes and stale work never duplicates gear',t=>{
@@ -42,7 +45,7 @@ test('pending drops keep requested sides across selection changes and stale work
 test('Both Drop holds an already retrieving selected anchor while adding the missing side',t=>{
   const h=fixture(t);rig(h,[-1],[3]);h.run('S.anchors[0].weighing=true');select(h,2);h.click('anchDrop');
   assert.equal(h.read('S.anchors[0].weighing'),false);assert.deepEqual(h.read('S.dropSides'),[1]);
-  h.advance(2600);assert.deepEqual(h.read('S.anchors.map(a=>[a.side,a.L0,a.held])'),[[-1,3,true],[1,3,true]]);
+  h.advance(2600);assert.deepEqual(h.read('S.anchors.map(a=>[a.side,a.held])'),[[-1,true],[1,true]]);assert.equal(h.read('S.anchors[0].L0'),3);
   rig(h,[1],[20]);h.run('S.anchors[0].weighing=true');select(h,0);h.click('anchDrop');
   assert.equal(h.read('S.anchors[0].weighing'),true,'an unselected anchor keeps retrieving');
   h.run('S.bowX=23.2;advanceDeckWork(1/60)');assert.deepEqual(h.read('S.anchors.map(a=>a.side)'),[1,-1]);
@@ -117,7 +120,7 @@ test('Both retrieval keeps its remaining anchor moving after the first is stowed
 test('Drop clears old anchor ownership so newly deployed gear cannot inherit a held windlass',t=>{
   const h=fixture(t);rig(h,[-1],[20]);select(h,2);h.pointer('chOut','pointerdown',{pointerId:10});h.click('anchDrop');
   assert.equal(h.read('anchorHold'),null);assert.equal(h.element('chOut').hasPointerCapture(10),false);
-  h.run('S.bowX=23.2;advanceDeckWork(1/60)');ticks(h,60);assert.deepEqual(lengths(h),[21,3]);
+  h.run('S.bowX=23.2;advanceDeckWork(1/60)');h.click('anchLock');ticks(h,60);const l=lengths(h);assert.equal(l[0],21);assert.ok(l[1]>=3&&l[1]<6,`new anchor ${l[1]}`);
 });
 
 test('a selected stowed side never falls back to the other deployed anchor or to lines',t=>{

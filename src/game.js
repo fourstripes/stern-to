@@ -154,18 +154,30 @@ function cycleAnchSel(){
   if(!canDrive())return;if(shipId==='tender'){toast('The tender has one bow anchor',1200);return;}
   setAnchorSelection((S.anchSel+1)%3);toast(['Port anchor','Starboard anchor','Both anchors'][S.anchSel],900);
 }
+/* Anchoring works like a real foredeck: Drop lets the anchor go and the crew pay the chain out under the brake as
+   she falls back; Lock puts the brake on; Up heaves it in. Each is one tap. */
 function dropAnchors(){
   if(!canDrive())return;releaseMooringInputs('anchor');
-  for(const A of selectedAnchors()){A.held=true;A.weighing=false;A.tapHeave=false;}
+  const addSides=anchSides().some(sd=>!S.anchors.some(a=>a.side===sd)&&!(S.dropSides||[]).includes(sd));
+  /* adding a missing anchor leaves the one already down as it is; otherwise Drop eases the brake and pays out more */
+  const resume=addSides?[]:selectedAnchors().filter(A=>!A.paying&&A.L0<140);
+  for(const A of selectedAnchors()){A.held=true;A.weighing=false;A.tapHeave=false;if(resume.includes(A)){A.paying=true;A.scopeSaid=false;}}
+  if(resume.length)toast('Paying out chain · tap the lock to hold it',1600);
   const pending=S.dropSides||[],missing=anchSides().filter(sd=>!S.anchors.some(a=>a.side===sd)&&!pending.includes(sd));
   if(!missing.length){updateMooringUI();return;}
   S.dropSides=[...pending,...missing];S.anchorCmd=true;updateMooringUI();toast('Anchor party to the bow',1300);
+}
+function lockAnchors(){
+  if(!canDrive())return;releaseMooringInputs('anchor');
+  const anchors=selectedAnchors();if(!anchors.length)return;
+  for(const A of anchors){A.held=true;A.weighing=false;A.paying=false;A.tapHeave=false;}
+  updateMooringUI();toast('Chain locked · '+Math.floor(Math.max(...anchors.map(a=>a.L0)))+' m out',1500);
 }
 function bringInAnchors(){
   if(!canDrive())return;releaseMooringInputs('anchor');
   const anchors=selectedAnchors();if(!anchors.length)return;
   const stop=anchors.some(a=>a.weighing);
-  for(const A of anchors){A.held=true;A.weighing=!stop;A.tapHeave=false;}
+  for(const A of anchors){A.held=true;A.weighing=!stop;A.paying=false;A.tapHeave=false;}
   updateMooringUI();toast(stop?'Chain held':anchors.length>1?'Bringing in both anchors':'Bringing in anchor',1500);
 }
 function letGo(){if(state!=='play')return;
@@ -353,7 +365,7 @@ function updateTraffic(dt){
 function anchorageStatus(){
   const target=Math.ceil(18*Math.max(.7,SL)),stop=stops&&stops[S.stage],active=!!(stop&&stop.anchor);
   const inZone=a=>active&&Math.hypot(a.x-slip.x,a.y-slip.y)<=slip.len/2;
-  const held=a=>a.held&&!a.weighing;
+  const held=a=>a.held&&!a.weighing&&!a.paying;
   const anchor=S.anchors.find(a=>inZone(a)&&held(a)&&a.L0>=target&&!a.drag)
     ||S.anchors.find(a=>inZone(a)&&held(a)&&a.L0>=target)
     ||S.anchors.find(a=>inZone(a)&&held(a))||S.anchors.find(inZone)||preferredAnchor();
@@ -361,7 +373,7 @@ function anchorageStatus(){
   const settled=!!(anchor&&!anchor.drag&&Math.hypot(S.u,S.v)<.2&&Math.abs(S.r)<.6*D2R);
   const complete=active&&S.done,progress=complete?1:active?clamp((S.svc||0)/stop.dur,0,1):0;
   const status=complete?'Anchorage complete':!anchor?'Drop an anchor in the marked circle':!inside?'Place the anchor in the marked circle'
-    :current<target?'Pay out '+target+' m of chain':!chainHeld?'Hold the chain':!settled?'Let the boat settle'
+    :current<target?'Pay out '+target+' m of chain':!chainHeld?'Lock the chain':!settled?'Let the boat settle'
     :'Holding · '+((S.svc||0).toFixed(1))+' / '+stop.dur+' s';
   return {target,current,inside,held:chainHeld,settled,progress,complete,status};
 }
@@ -466,17 +478,22 @@ function step(dt){
   for(const A of S.anchors){
     A.drag=false;
     const manual=anchorHold&&anchorHold.targets.includes(A)?anchorHold.direction:0;
-    if(manual){A.held=true;A.weighing=false;if(S.t>=anchorHold.after)A.L0=clamp(A.L0+(manual>0?-.8:2.2)*dt,2,140);}
-    else if(A.weighing){A.held=true;A.L0=Math.max(2,A.L0-.8*dt);}
+    if(manual){A.held=true;A.weighing=false;A.paying=false;if(S.t>=anchorHold.after)A.L0=clamp(A.L0+(manual>0?-.8:2.2)*dt,2,140);}
+    else if(A.weighing){A.held=true;A.paying=false;A.L0=Math.max(2,A.L0-.8*dt);}
     const ha=hawseFor(A.side),fx=S.x+ha[0]*cs-ha[1]*sn,fy=S.y+ha[0]*sn+ha[1]*cs;let dx=A.x-fx,dy=A.y-fy,d=Math.hypot(dx,dy)||1;
     const retrieving=A.tapHeave||(manual?manual>0:A.weighing);A.tapHeave=false;
     if(retrieving&&A.L0<=2.05&&d<=2.5){weighed.push(A);continue;}
     if(retrieving&&A.L0<3&&d<3)A.set=false;
+    if(A.paying&&!manual&&!A.weighing){ /* the crew ease the brake: a steady run, faster when she pulls away, never letting it snatch */
+      A.held=true;const dep=7*Math.sqrt(Math.max(.25,SL)),need=Math.hypot(d,dep)+1;
+      A.L0=Math.min(140,A.L0+dt*clamp(.75*Math.sqrt(Math.max(.5,SL))+Math.max(0,need-A.L0)*1.5,0,2.5*Math.sqrt(Math.max(.25,SL))));
+      if(A.L0>=140){A.paying=false;toast('All the chain is out · locked',1600);}}
     const SCOPE=Math.ceil(18*Math.max(.7,SL)),inAnchorage=!!(stops&&stops[S.stage].anchor&&Math.hypot(A.x-slip.x,A.y-slip.y)<=slip.len/2);
-    const readyToSet=!retrieving&&A.held&&A.L0>=SCOPE;
+    const readyToSet=!retrieving&&A.held&&!A.paying&&A.L0>=SCOPE;
+    if(A.paying&&A.L0>=SCOPE&&!A.scopeSaid){A.scopeSaid=true;toast('Enough chain out · tap the lock to hold it',2200);}
     A.settle=inAnchorage&&readyToSet&&Math.hypot(u,v)<.2&&Math.abs(r)<.6*D2R?(A.settle||0)+dt:0;
     if(!A.set&&readyToSet&&(inAnchorage?A.settle>=.75:d>=Math.min(A.L0-1.2,SCOPE*.8))){A.set=true;toast('Anchor holding · '+Math.floor(A.L0)+' m out',1800);}
-    if(!retrieving&&A.held&&!A.set&&A.L0<SCOPE&&S.t-(A.warnT||-9)>8){A.warnT=S.t;toast('Pay out more chain · tap or hold +',2200);}
+    if(!retrieving&&A.held&&!A.paying&&!A.set&&A.L0<SCOPE&&S.t-(A.warnT||-9)>8){A.warnT=S.t;toast('Pay out more chain · tap the down arrow',2200);}
     {const al=(A.x-S.x)*cs+(A.y-S.y)*sn,la=-(A.x-S.x)*sn+(A.y-S.y)*cs;if(al<ha[0]-3&&al>-LEN/2&&Math.abs(la)<BEAM*.55){S.damage=Math.min(100,S.damage+dt*(.6+Math.hypot(u,v)*2));if(S.t-(A.scrT||-9)>4){A.scrT=S.t;toast('Chain scraping the hull · back away from it',2000);}}}
     if(!A.held){A.run=(A.run||0)+dt;if(A.run>.9&&A.run<4.4)A.L0+=4*(1-(A.run-.9)/3.5)*Math.max(.5,SL)*dt;A.L0=Math.max(A.L0,d+1);} /* free chain rumbles out to the sea bed */
     else{let ext=d-A.L0;if(ext>0){
@@ -1633,8 +1650,11 @@ function updateMooringUI(){
       button.setAttribute('aria-label',name+' anchor: '+(pending?'preparing':A?.weighing?'bringing in':A?.drag?'dragging':A?.set?'holding':A?'down':'stowed'));
     }
     const sides=anchSides(),anchors=selectedAnchors(),pending=(S.dropSides||[]).filter(sd=>sides.includes(sd)),retrieving=anchors.some(a=>a.weighing);
-    const drop=$('anchDrop'),weigh=$('anchWeigh');drop.disabled=!sides.some(sd=>!S.anchors.some(a=>a.side===sd)&&!pending.includes(sd));
-    const dropText=pending.length?'Drop…':'Drop';if(drop.textContent!==dropText)drop.textContent=dropText;
+    const drop=$('anchDrop'),weigh=$('anchWeigh'),lock=$('anchLock'),missing=sides.some(sd=>!S.anchors.some(a=>a.side===sd)&&!pending.includes(sd));
+    const paying=anchors.some(a=>a.paying),locked=anchors.length>0&&anchors.every(a=>a.held&&!a.paying&&!a.weighing);
+    drop.disabled=!missing&&!anchors.some(a=>!a.paying&&a.L0<140);
+    const dropText=pending.length?'Drop…':missing?'Drop':'Pay out';if(drop.textContent!==dropText)drop.textContent=dropText;drop.classList.toggle('on',paying);
+    lock.disabled=!anchors.length;lock.classList.toggle('on',locked);lock.setAttribute('aria-pressed',String(locked));
     weigh.disabled=!anchors.length;const weighText=retrieving?'Stop':'Bring in';if(weigh.textContent!==weighText)weigh.textContent=weighText;weigh.classList.toggle('on',retrieving);
     $('chIn').disabled=$('chOut').disabled=!anchors.length;
     const length=A=>(Math.floor(A.L0*10+1e-8)/10).toFixed(1)+' m',chain=$('anchorChain');
@@ -1642,7 +1662,7 @@ function updateMooringUI(){
     if(chain.textContent!==chainText)chain.textContent=chainText;
     chain.setAttribute('aria-label',sides.map(sd=>{const A=anchors.find(a=>a.side===sd);return(sd<0?'Port':sd>0?'Starboard':'Bow')+': '+(A?length(A)+' of chain out':'stowed');}).join('; '));
     const tx=$('scopeTx'),dragging=anchors.some(a=>a.drag),holding=anchors.length&&anchors.every(a=>a.set&&!a.drag),sc=Math.ceil(18*Math.max(.7,SL));
-    const text=pending.length?'Preparing anchor'+(pending.length>1?'s':''):retrieving?'Bringing in':dragging?'Dragging':!anchors.length?'Stowed':holding?'Holding':anchors.some(a=>a.L0<sc)?'Chain held · use +':'Chain held';
+    const text=pending.length?'Preparing anchor'+(pending.length>1?'s':''):paying?'Paying out':retrieving?'Bringing in':dragging?'Dragging':!anchors.length?'Stowed':holding?'Holding':anchors.some(a=>a.L0<sc)?'Locked · pay out more':'Locked';
     if(tx.textContent!==text)tx.textContent=text;tx.className='lt'+(holding?' ok':dragging?' bad':'');
   }
   const one=sel>=0&&lines[sel].state==='fast'?lines[sel]:null,hd=mooringSection==='lines'&&fast.length>0,ab=$('actBox');
@@ -1716,15 +1736,15 @@ function advanceDeckWork(dt){
   /* crew go inside while she is under way, and come back out as she nears the berth or there is work on deck */
   var goIn=Math.hypot(slip.x-S.x,slip.y-S.y)>Math.max(80,LEN*1.8)&&!lines.some(l=>l.state!=='stowed')&&!S.anchors.length&&!S.anchorCmd&&!S.fend&&S.fendN[0]+S.fendN[1]<.01;
   /* the bow hand only comes out to work the anchor or a bow line, then goes back in */
-  const bowWork=S.anchorCmd||S.anchors.some(a=>!a.held||a.weighing)||[0,1].some(i=>{const st=lines[i].state;return st==='throw'||st==='haul'||st==='queued';});
+  const bowWork=S.anchorCmd||S.anchors.some(a=>!a.held||a.weighing||a.paying)||[0,1].some(i=>{const st=lines[i].state;return st==='throw'||st==='haul'||st==='queued';});
   const bxT=S.anchorCmd||S.anchors.some(a=>!a.held)?23.2:bowWork?19.5:13.8;S.bowX+=clamp(bxT-S.bowX,-3*dt/SL,3*dt/SL);
   crew[0].visible=bowWork||(shipId!=='tender'&&!(Math.abs(S.bowX-13.8)<.2&&Math.abs(S.bowY)<.2));
   if(S.anchorCmd&&Math.abs(S.bowX-23.2)<.1){
     const c0=Math.cos(S.psi),s0=Math.sin(S.psi);S.anchorCmd=false;
     const dsides=(S.dropSides||[]).filter(sd=>!S.anchors.some(a=>a.side===sd));S.dropSides=null;
-    for(const sd of dsides){const hp=hawseFor(sd),ax=S.x+hp[0]*c0-hp[1]*s0,ay=S.y+hp[0]*s0+hp[1]*c0;S.anchors.push({side:sd,x:ax,y:ay,L0:3,held:true,t:0});}
+    for(const sd of dsides){const hp=hawseFor(sd),ax=S.x+hp[0]*c0-hp[1]*s0,ay=S.y+hp[0]*s0+hp[1]*c0;S.anchors.push({side:sd,x:ax,y:ay,L0:3,held:true,paying:true,t:0});}
     if(dsides.length){
-      const nm=dsides.length>1?'Both anchors':['Port','Bow','Starboard'][dsides[0]+1]+' anchor';toast(nm+' down · 3 m chain held',1500);
+      const nm=dsides.length>1?'Both anchors':['Port','Bow','Starboard'][dsides[0]+1]+' anchor';toast(nm+' away · paying out chain',1500);
       const ax=S.x+hawseFor(dsides[0])[0]*c0,ay=S.y+hawseFor(dsides[0])[0]*s0;
       for(let i=0;i<16;i++)spawn(1,ax+rnd(-1,1),ay+rnd(-1,1),rnd(-1.8,1.8),rnd(-1.8,1.8),rnd(.5,.9),rnd(1.2,2.6),.6);wakeDrop(ax,ay,1.3);
     }
@@ -1840,7 +1860,7 @@ function bindHoldButton(button,command,before){
 }
 // Tap changes chain by one metre. A deliberate hold then runs the same selected windlass(es).
 function adjustAnchorChain(targets,direction){
-  for(const A of targets)if(S.anchors.includes(A)){A.held=true;A.weighing=false;A.tapHeave=direction>0;A.L0=clamp(A.L0-direction,2,140);}
+  for(const A of targets)if(S.anchors.includes(A)){A.held=true;A.weighing=false;A.paying=false;A.tapHeave=direction>0;A.L0=clamp(A.L0-direction,2,140);}
   updateMooringUI();
 }
 function bindChainButton(button,direction){
@@ -1925,7 +1945,7 @@ $('stop').onclick=allStop;$('syncBtn').onclick=toggleSync;
 FEND_BTNS.forEach(button=>button.onclick=()=>{const value=+button.dataset.fender;setFenders(value===1||value===2?S.fend^value:value);});
 ANCH_BTNS.forEach(button=>button.onclick=()=>setAnchorSelection(+button.dataset.anchor));
 [['chIn',1],['chOut',-1]].forEach(([id,d])=>bindChainButton($(id),d));
-$('anchDrop').onclick=dropAnchors;$('anchWeigh').onclick=bringInAnchors;
+$('anchDrop').onclick=dropAnchors;$('anchLock').onclick=lockAnchors;$('anchWeigh').onclick=bringInAnchors;
 const actionTargetReady=()=>mooringSection==='lines'&&lines.some(l=>l.state==='fast');
 [['hvBtn',1],['slBtn',-1]].forEach(([id,d])=>bindHoldButton($(id),{kind:'haul',direction:d},actionTargetReady));
 $('lgBtn').onclick=()=>{if(actionTargetReady())letGo();};
@@ -2000,7 +2020,7 @@ addEventListener('keydown',e=>{
     else if(k==='h'||k==='j'){if(!e.repeat||inputSources.has('shortcut:'+k))setHeldInput('shortcut:'+k,{kind:'haul',direction:k==='h'?1:-1});}
     else if(k==='g'){if(!e.repeat)letGo();}
     else if(k==='f'){if(!e.repeat)toggleFend();}
-    else if(k==='x'){if(!e.repeat)dropAnchors();}
+    else if(k==='x'){if(!e.repeat){if(selectedAnchors().some(a=>a.paying))lockAnchors();else dropAnchors();}}
     else if(k==='b'){if(!e.repeat)bringInAnchors();}
     else if(k==='z'){if(!e.repeat)cycleAnchSel();}
     else if(k==='a'||k==='d'){if(!e.repeat||inputSources.has('shortcut:'+k))setHeldInput('shortcut:'+k,{kind:'thruster',direction:k==='a'?-1:1});}

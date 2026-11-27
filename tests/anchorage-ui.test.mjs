@@ -23,7 +23,7 @@ test('the final goal shows exact required chain and never rounds short scope up 
   assert.match(h.element('anchorHint').textContent,/Pay out 18 m/);
   assert.equal(h.element('anchorGoal').classList.contains('ready'),false);
   h.run('S.anchors[0].L0=18;S.anchors[0].held=false;updateMooringUI();');
-  assert.match(h.element('anchorHint').textContent,/Hold the chain/);
+  assert.match(h.element('anchorHint').textContent,/Lock the chain/);
   h.run('S.anchors[0].held=true;updateMooringUI();');
   assert.equal(h.element('anchorGoal').classList.contains('ready'),true);
 });

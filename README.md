@@ -46,7 +46,7 @@ The core simulation runs at 60 Hz. Vessel dynamics, water sampling and navigatio
 | Engines to neutral | Space |
 | Mooring lines | 1–6 |
 | Heave lines / slack lines / let lines go | Hold H / J, G |
-| Choose anchors / drop / bring in or stop | Z / X / B |
+| Choose anchors / drop or lock / bring in or stop | Z / X / B |
 | Fenders | F |
 | Top / chase camera | T / V |
 | Pause / close equipment or open menu / restart | P / Escape / R |
@@ -57,7 +57,7 @@ Anchors, Lines and Fenders share one skinny panel with three icons and start clo
 
 The equipment cards fit without an internal scroll area. On short landscape screens they use the space beside the helm, with the helm on the opposite side. A layout change releases momentary touches before controls move, while latched throttle stays set. Escape closes an open equipment card before opening the main menu.
 
-The Anchors panel keeps its yacht diagram, Drop, Bring in and chain controls together. Tap the Port or Starboard anchor at the bow, or Both; the tender has one centred Bow anchor. Selecting a side does not drop or retrieve it. Amber outlines show selection and green state markers show deployed equipment. Drop lowers the selected missing anchors with 3 m of chain and holds automatically. Tap − or + for one metre, or hold to adjust continuously. Bring in retrieves the selected anchors over time and changes to Stop while retrieving. Both applies to both selected anchors; changing selection does not move or remove equipment. The rendered chain and anchor shackle share the hull's anchor socket and remain connected through vessel movement, dropping and retrieval. The Lines panel has its own separate actions. All stop selects neutral; use astern thrust to brake the boat's momentum.
+The Anchors panel works like a real foredeck with three one-tap buttons. Tap the Port or Starboard anchor at the bow, or the pair for Both (the tender has one Bow anchor). The down arrow lets the anchor go, and the crew then pay the chain out under the brake by themselves: a steady run, faster as she falls back, never snatching tight. The down arrow pulses while chain is running. Tap the padlock to lock it off; it turns green when the chain is held. Tap the down arrow again to pay out more, or the up arrow to bring the anchor in (tap again to stop). The small − and + buttons nudge the chain a metre at a time. The crew tell you when enough chain is out. The rendered chain and anchor shackle share the hull's anchor socket and remain connected through vessel movement, dropping and retrieval. The Lines panel has its own separate actions. All stop selects neutral; use astern thrust to brake the boat's momentum.
 
 ## Mission navigation and the final anchorage
 
